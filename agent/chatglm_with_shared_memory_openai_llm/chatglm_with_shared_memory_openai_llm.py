@@ -1,6 +1,8 @@
 import torch
 from langchain.agents import ZeroShotAgent, Tool, AgentExecutor
 from langchain.llms import OpenAI
+from langchain.llms import LlamaCpp
+from langchain import PromptTemplate, LLMChain
 from langchain.memory import ConversationBufferMemory, ReadOnlySharedMemory
 from langchain.chains import LLMChain, RetrievalQA
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
@@ -81,7 +83,7 @@ class ChatglmWithSharedMemoryOpenaiLLM:
             Tool(
                 name="State of Dialogue History System",
                 func=self.state_of_history.run,
-                description=f"{dialogue_participants}的对话 - 当需要查找{dialogue_participants}之间的聊天内容时，这里面的回答是很有用的。输入应该是一个完整的问题。"
+                description=f"{dialogue_participants}"
             ),
             Tool(
                 name="Summary",
@@ -103,7 +105,8 @@ class ChatglmWithSharedMemoryOpenaiLLM:
             suffix=suffix,
             input_variables=["input", "chat_history", "agent_scratchpad"]
         )
-
+        # llm = LlamaCpp(model_path="/media/gpt4-pdf-chatbot-langchain/llama.cpp/zh-models/7B/ggml-model-q4_0.bin")
+        # llm_chain = LLMChain(llm=llm, prompt=prompt)
         llm_chain = LLMChain(llm=OpenAI(temperature=0), prompt=prompt)
         agent = ZeroShotAgent(llm_chain=llm_chain, tools=tools, verbose=True)
         agent_chain = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbose=True, memory=self.memory)
