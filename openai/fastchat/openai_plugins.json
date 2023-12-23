@@ -1,0 +1,9 @@
+{
+  "plugins_name": "fastchat",
+  "endpoint_host": "https://localhost:5000",
+  "install_file": "install.py",
+  "application_file": "app.py",
+  "application_class": "FastChatApplicationAdapter",
+  "endpoint_controller_file": "controller.py",
+  "endpoint_controller_class": "FastChatControllerAdapter"
+}
