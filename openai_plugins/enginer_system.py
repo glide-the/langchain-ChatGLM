@@ -59,6 +59,9 @@ def openai_components_plugins_register():
         # 获取openai-plugins-list.json配置的endpoint_controller_file和endpoint_controller_class
         endpoint_controller_file = openai_plugins.endpoint_controller_file
         endpoint_controller_class = openai_plugins.endpoint_controller_class
+        # 获取openai-plugins-list.json配置的endpoint_controller_file和endpoint_controller_class
+        application_file = openai_plugins.application_file
+        application_class = openai_plugins.application_class
         # 检查项目配置的openai-plugins-list.json文件中openai_plugins，是否包含当前模块
         openai_plugins_list_json = os.path.join(registry.get_path("openai_plugins_library_root"),
                                                 "openai-plugins-list.json")
@@ -77,8 +80,8 @@ def openai_components_plugins_register():
                         # 加载openai application模块
                         plugins_components_load(register_application_adapter,
                                                 module_path,
-                                                endpoint_controller_file,
-                                                endpoint_controller_class)
+                                                application_file,
+                                                application_class)
 
 
 def openai_install_plugins_load():

@@ -5,9 +5,6 @@ from openai_plugins.adapter.adapter import Adapter, LLMWorkerInfo, ProcessesInfo
 
 class ApplicationAdapter(Adapter):
 
-    def __init__(self, state_dict: dict):
-        super().__init__(state_dict)
-
     @abstractmethod
     def init_processes(self, processesInfo: ProcessesInfo):
         raise NotImplementedError
