@@ -17,13 +17,13 @@ class ControllerAdapter(Adapter):
         raise NotImplementedError
 
     @abstractmethod
-    def start(self, new_model_name: str):
+    def start(self, pid: str, new_model_name: str):
         raise NotImplementedError
 
     @abstractmethod
-    def stop(self, model_name: str):
+    def stop(self, pid: str, model_name: str):
         raise NotImplementedError
 
     @abstractmethod
-    def replace(self, model_name: str, new_model_name: str):
+    def replace(self, pid: str, model_name: str, new_model_name: str):
         raise NotImplementedError

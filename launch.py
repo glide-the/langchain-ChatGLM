@@ -49,6 +49,7 @@ async def main():
     run_mode = None
 
     queue = manager.Queue()
+    completed_queue = manager.Queue()
 
     if args.all_webui:
         args.api = True
@@ -77,7 +78,8 @@ async def main():
         process = Process(
             target=launch_utils.run_api_server,
             name=f"API Server",
-            kwargs=dict(started_event=api_started, run_mode=run_mode),
+            kwargs=dict(started_event=api_started, run_mode=run_mode,
+                        q=queue, completed_queue=completed_queue),
             daemon=True,
         )
         processes["api"] = process
@@ -100,6 +102,7 @@ async def main():
             controller_address=args.controller_address,
             log_level=log_level,
             queue=queue,
+            completed_queue=completed_queue,
             mp_manager=manager,
         )
 
@@ -112,6 +115,7 @@ async def main():
             controller_address=args.controller_address,
             log_level=log_level,
             queue=queue,
+            completed_queue=completed_queue,
             mp_manager=manager,
         )
 
@@ -147,17 +151,17 @@ async def main():
             logger.info(f"收到切换模型的消息：{cmd}")
 
             if isinstance(cmd, list):
-                model_name, cmd, new_model_name = cmd
+                model_name, cmd, new_model_name, pid = cmd
                 if cmd == "start":  # 运行新模型
                     for control_adapter in control_adapters:
-                        control_adapter.start(new_model_name=new_model_name)
+                        control_adapter.start(pid=pid, new_model_name=new_model_name)
                 elif cmd == "stop":
                     for control_adapter in control_adapters:
-                        control_adapter.stop(model_name=model_name)
+                        control_adapter.stop(pid=pid, model_name=model_name)
 
                 elif cmd == "replace":
                     for control_adapter in control_adapters:
-                        control_adapter.replace(model_name=model_name, new_model_name=new_model_name)
+                        control_adapter.replace(pid=pid, model_name=model_name, new_model_name=new_model_name)
 
     except Exception as e:
         logger.error(e)

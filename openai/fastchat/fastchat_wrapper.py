@@ -272,65 +272,6 @@ def run_controller(log_level: str = "INFO", started_event: mp.Event = None):
     )
     _set_app_event(app, started_event)
 
-    # add interface to release and load model worker
-    @app.post("/release_worker")
-    def release_worker(
-            model_name: str = Body(..., description="要释放模型的名称", samples=["chatglm-6b"]),
-            # worker_address: str = Body(None, description="要释放模型的地址，与名称二选一", samples=[FSCHAT_CONTROLLER_address()]),
-            new_model_name: str = Body(None, description="释放后加载该模型"),
-            keep_origin: bool = Body(False, description="不释放原模型，加载新模型")
-    ) -> Dict:
-        available_models = app._controller.list_models()
-        if new_model_name in available_models:
-            msg = f"要切换的LLM模型 {new_model_name} 已经存在"
-            logger.info(msg)
-            return {"code": 500, "msg": msg}
-
-        if new_model_name:
-            logger.info(f"开始切换LLM模型：从 {model_name} 到 {new_model_name}")
-        else:
-            logger.info(f"即将停止LLM模型： {model_name}")
-
-        if model_name not in available_models:
-            msg = f"the model {model_name} is not available"
-            logger.error(msg)
-            return {"code": 500, "msg": msg}
-
-        worker_address = app._controller.get_worker_address(model_name)
-        if not worker_address:
-            msg = f"can not find model_worker address for {model_name}"
-            logger.error(msg)
-            return {"code": 500, "msg": msg}
-
-        with get_httpx_client() as client:
-            r = client.post(worker_address + "/release",
-                            json={"new_model_name": new_model_name, "keep_origin": keep_origin})
-            if r.status_code != 200:
-                msg = f"failed to release model: {model_name}"
-                logger.error(msg)
-                return {"code": 500, "msg": msg}
-
-        if new_model_name:
-            timer = HTTPX_DEFAULT_TIMEOUT  # wait for new model_worker register
-            while timer > 0:
-                models = app._controller.list_models()
-                if new_model_name in models:
-                    break
-                time.sleep(1)
-                timer -= 1
-            if timer > 0:
-                msg = f"sucess change model from {model_name} to {new_model_name}"
-                logger.info(msg)
-                return {"code": 200, "msg": msg}
-            else:
-                msg = f"failed change model from {model_name} to {new_model_name}"
-                logger.error(msg)
-                return {"code": 500, "msg": msg}
-        else:
-            msg = f"sucess to release model: {model_name}"
-            logger.info(msg)
-            return {"code": 200, "msg": msg}
-
     host = FSCHAT_CONTROLLER["host"]
     port = FSCHAT_CONTROLLER["port"]
 
@@ -383,22 +324,6 @@ def run_model_worker(
     if log_level == "ERROR":
         sys.stdout = sys.__stdout__
         sys.stderr = sys.__stderr__
-
-    # add interface to release and load model
-    @app.post("/release")
-    def release_model(
-            new_model_name: str = Body(None, description="释放后加载该模型"),
-            keep_origin: bool = Body(False, description="不释放原模型，加载新模型")
-    ) -> Dict:
-        if keep_origin:
-            if new_model_name:
-                q.put([model_name, "start", new_model_name])
-        else:
-            if new_model_name:
-                q.put([model_name, "replace", new_model_name])
-            else:
-                q.put([model_name, "stop", None])
-        return {"code": 200, "msg": "done"}
 
     uvicorn.run(app, host=host, port=port, log_level=log_level.lower())
 

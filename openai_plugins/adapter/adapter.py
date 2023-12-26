@@ -28,6 +28,7 @@ class ProcessesInfo:
             controller_address: Optional[str],
             log_level: str = "INFO",
             queue: mp.Queue = None,
+            completed_queue: mp.Queue = None,
             mp_manager=None,
     ):
         """
@@ -35,13 +36,15 @@ class ProcessesInfo:
         :param model_name: 模型 name
         :param controller_address: 接口地址
         :param log_level: 日志级别
-        :param q: 信号队列
+        :param queue: 信号队列，用于模型控制，包含如下信号：start, stop, replace
+        :param completed_queue: 信号队列，模型控制完成后，向该队列发送信号,包含如下信号：started, stopped, replaced
         :param mp_manager:  进程管理器
         """
         self.model_name = model_name
         self.controller_address = controller_address
         self.log_level = log_level
         self.queue = queue
+        self.completed_queue = completed_queue
         self.mp_manager = mp_manager
 
     def to_dict(self):
@@ -50,6 +53,7 @@ class ProcessesInfo:
             "controller_address": self.controller_address,
             "log_level": self.log_level,
             "queue": self.queue,
+            "completed_queue": self.completed_queue,
             "mp_manager": self.mp_manager
         }
 

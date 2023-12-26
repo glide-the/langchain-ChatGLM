@@ -22,6 +22,8 @@ from fastapi import FastAPI
 from launch_module import cmd_args
 import multiprocessing as mp
 import subprocess
+import launch_module.launch_mp_queue as launch_mp_queue
+
 args, _ = cmd_args.parser.parse_known_args()
 
 
@@ -32,12 +34,14 @@ def _set_app_event(app: FastAPI, started_event: mp.Event = None):
             started_event.set()
 
 
-def run_api_server(started_event: mp.Event = None, run_mode: str = None):
+def run_api_server(started_event: mp.Event = None, run_mode: str = None, q: mp.Queue = None,
+                   completed_queue: mp.Queue = None):
     from server.api import create_app
     import uvicorn
     from server.utils import set_httpx_config
     set_httpx_config()
-
+    launch_mp_queue.shared_queue = q
+    launch_mp_queue.shared_completed_queue = completed_queue
     app = create_app(run_mode=run_mode)
     _set_app_event(app, started_event)
 
@@ -70,6 +74,7 @@ def run_webui(started_event: mp.Event = None, run_mode: str = None):
     p = subprocess.Popen(cmd)
     started_event.set()
     p.wait()
+
 
 def dump_server_info(after_start=False, args=None):
     import platform
