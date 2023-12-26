@@ -51,25 +51,9 @@ async def main():
     queue = manager.Queue()
 
     if args.all_webui:
-        args.openai_api = True
-        args.model_worker = True
         args.api = True
-        args.api_worker = True
         args.webui = True
 
-    elif args.all_api:
-        args.openai_api = True
-        args.model_worker = True
-        args.api = True
-        args.api_worker = True
-        args.webui = False
-
-    elif args.llm_api:
-        args.openai_api = True
-        args.model_worker = True
-        args.api_worker = True
-        args.api = False
-        args.webui = False
 
     if args.lite:
         args.model_worker = False
@@ -121,7 +105,28 @@ async def main():
 
         app_adapter.init_processes(processesInfo=processesInfo)
 
+    control_adapters = callback_map.callbacks_controller_adapter.get_callbacks()
+    for control_adapter in control_adapters:
+        processesInfo = ProcessesInfo(
+            model_name=args.model_name,
+            controller_address=args.controller_address,
+            log_level=log_level,
+            queue=queue,
+            mp_manager=manager,
+        )
+
+        control_adapter.init_processes(processesInfo=processesInfo)
+
     try:
+
+        # openai_plugins 组件启动
+        try:
+            for app_adapter in app_adapters:
+                app_adapter.start()
+        except Exception as e:
+            logger.error(e)
+            raise e
+
         if p := processes.get("api"):
             p.start()
             p.name = f"{p.name} ({p.pid})"
@@ -132,20 +137,27 @@ async def main():
             p.name = f"{p.name} ({p.pid})"
             webui_started.wait()  # 等待webui.py启动完成
 
-        # openai_plugins 组件启动
-        try:
-            for app_adapter in app_adapters:
-                app_adapter.start()
-        except Exception as e:
-            logger.error(e)
-            raise e
-
-
         dump_server_info(after_start=True, args=args)
 
         while True:
+            # 收到切换模型的消息
+
             cmd = queue.get()
+
             logger.info(f"收到切换模型的消息：{cmd}")
+
+            if isinstance(cmd, list):
+                model_name, cmd, new_model_name = cmd
+                if cmd == "start":  # 运行新模型
+                    for control_adapter in control_adapters:
+                        control_adapter.start(new_model_name=new_model_name)
+                elif cmd == "stop":
+                    for control_adapter in control_adapters:
+                        control_adapter.stop(model_name=model_name)
+
+                elif cmd == "replace":
+                    for control_adapter in control_adapters:
+                        control_adapter.replace(model_name=model_name, new_model_name=new_model_name)
 
     except Exception as e:
         logger.error(e)
@@ -154,6 +166,14 @@ async def main():
         # Send SIGINT if process doesn't exit quickly enough, and kill it as last resort
         # .is_alive() also implicitly joins the process (good practice in linux)
         # while alive_procs := [p for p in processes.values() if p.is_alive()]:
+
+        # openai_plugins 组件启动
+        try:
+            for app_adapter in app_adapters:
+                app_adapter.stop()
+        except Exception as e:
+            logger.error(e)
+            raise e
 
         for p in processes.values():
             logger.warning("Sending SIGKILL to %s", p)
@@ -168,6 +188,7 @@ async def main():
 
         for p in processes.values():
             logger.info("Process status: %s", p)
+
 
 if __name__ == "__main__":
     # 确保数据库表被创建
