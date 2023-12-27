@@ -12,6 +12,7 @@ import time
 from datetime import datetime
 import os
 import sys
+
 # 为了能使用fastchat_wrapper.py中的函数，需要将当前目录加入到sys.path中
 root_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(root_dir)
@@ -20,13 +21,9 @@ from fastchat_wrapper import run_controller, run_model_worker, run_openai_api
 
 
 class FastChatControllerAdapter(ControllerAdapter):
-    processesInfo: ProcessesInfo = None
 
     def __init__(self, state_dict: dict = None):
         super().__init__(state_dict=state_dict)
-
-    def init_processes(self, processesInfo: ProcessesInfo):
-        self.processesInfo = processesInfo
 
     def list_running_models(self) -> List[LLMWorkerInfo]:
         pass
@@ -34,7 +31,7 @@ class FastChatControllerAdapter(ControllerAdapter):
     def get_model_config(self, model_name) -> LLMWorkerInfo:
         pass
 
-    def start(self, pid: str, new_model_name):
+    def start(self, new_model_name):
         logger.info(f"准备启动新模型进程：{new_model_name}")
         e = self.processesInfo.mp_manager.Event()
         process = Process(
@@ -53,7 +50,7 @@ class FastChatControllerAdapter(ControllerAdapter):
         e.wait()
         logger.info(f"成功启动新模型进程：{new_model_name}")
 
-    def stop(self, pid: str, model_name: str):
+    def stop(self, model_name: str):
         if process := fastchat_process_dict.processes["model_worker"].get(model_name):
             time.sleep(1)
             process.terminate()
@@ -88,8 +85,6 @@ class FastChatControllerAdapter(ControllerAdapter):
             logger.info(f"成功启动新模型进程：{new_model_name}。用时：{timing}。")
         else:
             logger.error(f"未找到模型进程：{model_name}")
-
-        self.processesInfo.completed_queue.put([model_name, "replaced", new_model_name, pid])
 
     @classmethod
     def from_config(cls, cfg=None):

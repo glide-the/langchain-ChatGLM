@@ -4,9 +4,10 @@ from openai_plugins.adapter.adapter import Adapter, LLMWorkerInfo, ProcessesInfo
 
 
 class ControllerAdapter(Adapter):
-    @abstractmethod
+    processesInfo: ProcessesInfo = None
+
     def init_processes(self, processesInfo: ProcessesInfo):
-        raise NotImplementedError
+        self.processesInfo = processesInfo
 
     @abstractmethod
     def list_running_models(self) -> List[LLMWorkerInfo]:
@@ -17,13 +18,28 @@ class ControllerAdapter(Adapter):
         raise NotImplementedError
 
     @abstractmethod
+    def start(self, new_model_name: str):
+        raise NotImplementedError
+
     def start(self, pid: str, new_model_name: str):
-        raise NotImplementedError
+        self.start(new_model_name=new_model_name)
+
+        self.processesInfo.completed_queue.put([new_model_name, "started", None, pid])
 
     @abstractmethod
+    def stop(self, model_name: str):
+        raise NotImplementedError
+
     def stop(self, pid: str, model_name: str):
-        raise NotImplementedError
+        self.stop(model_name=model_name)
+
+        self.processesInfo.completed_queue.put([model_name, "stopped", None, pid])
 
     @abstractmethod
-    def replace(self, pid: str, model_name: str, new_model_name: str):
+    def replace(self, model_name: str, new_model_name: str):
         raise NotImplementedError
+
+    def replace(self, pid: str, model_name: str, new_model_name: str):
+        self.replace(model_name=model_name, new_model_name=new_model_name)
+
+        self.processesInfo.completed_queue.put([model_name, "replaced", new_model_name, pid])
