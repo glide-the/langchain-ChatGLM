@@ -2,11 +2,10 @@ from multiprocessing import Process
 from typing import List
 from configs import (
     logger,
-    FSCHAT_MODEL_WORKERS,
 )
 from launch_module import shared_cmd_options
-from openai_plugins.adapter.adapter import LLMWorkerInfo, ProcessesInfo
-from openai_plugins.controller import ControllerAdapter
+from openai_plugins.core.adapter import LLMWorkerInfo
+from openai_plugins.core.control import ControlAdapter
 
 import time
 from datetime import datetime
@@ -17,19 +16,17 @@ import sys
 root_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(root_dir)
 import fastchat_process_dict
-from fastchat_wrapper import run_controller, run_model_worker, run_openai_api
+from fastchat_wrapper import run_model_worker
 
 
-class FastChatControllerAdapter(ControllerAdapter):
+class FastChatControlAdapter(ControlAdapter):
 
     def __init__(self, state_dict: dict = None):
         super().__init__(state_dict=state_dict)
 
-    def list_running_models(self) -> List[LLMWorkerInfo]:
-        pass
-
-    def get_model_config(self, model_name) -> LLMWorkerInfo:
-        pass
+    def class_name(self) -> str:
+        """Get class name."""
+        return self.__name__
 
     def start(self, new_model_name):
         logger.info(f"准备启动新模型进程：{new_model_name}")
@@ -46,7 +43,7 @@ class FastChatControllerAdapter(ControllerAdapter):
         )
         process.start()
         process.name = f"{process.name} ({process.pid})"
-        self.processes["model_worker"][new_model_name] = process
+        fastchat_process_dict.processes["model_worker"][new_model_name] = process
         e.wait()
         logger.info(f"成功启动新模型进程：{new_model_name}")
 

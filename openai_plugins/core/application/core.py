@@ -1,6 +1,5 @@
-from typing import Optional, List
 from abc import abstractmethod
-from openai_plugins.adapter.adapter import Adapter, LLMWorkerInfo, ProcessesInfo
+from openai_plugins.core.adapter.adapter import Adapter, ProcessesInfo
 
 
 class ApplicationAdapter(Adapter):

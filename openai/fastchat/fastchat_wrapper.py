@@ -1,25 +1,18 @@
-from typing import Dict, List
+from typing import List
 
-from launch_module import shared_cmd_options
 from fastapi import FastAPI
 import sys
 
-from openai_plugins.adapter.adapter import ProcessesInfo
 from server.utils import (MakeFastAPIOffline)
 import multiprocessing as mp
 from configs import (
     LOG_PATH,
-    logger,
     FSCHAT_CONTROLLER,
-    HTTPX_DEFAULT_TIMEOUT,
     FSCHAT_OPENAI_API,
-    FSCHAT_MODEL_WORKERS,
 )
 import uvicorn
 import os
-from fastapi import Body
-import time
-from server.utils import (get_httpx_client, fschat_controller_address, set_httpx_config,
+from server.utils import (fschat_controller_address, set_httpx_config,
                           fschat_model_worker_address, get_model_worker_config)
 
 """
@@ -305,7 +298,6 @@ def run_model_worker(
         started_event: mp.Event = None,
 ):
     import uvicorn
-    from fastapi import Body
     import sys
     from server.utils import set_httpx_config
     set_httpx_config()

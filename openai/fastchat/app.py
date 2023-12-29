@@ -1,18 +1,15 @@
-from typing import Dict, List
+from typing import List
 
-from openai_plugins.adapter.adapter import ProcessesInfo
-from openai_plugins.application import ApplicationAdapter
+from openai_plugins.core.adapter import ProcessesInfo
+from openai_plugins.core.application import ApplicationAdapter
 from launch_module import shared_cmd_options
-from multiprocessing import Process, Manager
+from multiprocessing import Process
 import multiprocessing as mp
 from configs import (
     logger,
     FSCHAT_MODEL_WORKERS,
 )
-import time
-from server.utils import (get_httpx_client, fschat_controller_address, set_httpx_config,
-                          fschat_model_worker_address, get_model_worker_config)
-from datetime import datetime
+from server.utils import (get_model_worker_config)
 import os
 import sys
 
@@ -32,6 +29,10 @@ class FastChatApplicationAdapter(ApplicationAdapter):
     def __init__(self, state_dict: dict = None):
 
         super().__init__(state_dict=state_dict)
+
+    def class_name(self) -> str:
+        """Get class name."""
+        return self.__name__
 
     @classmethod
     def from_config(cls, cfg=None):

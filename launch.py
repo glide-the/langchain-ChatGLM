@@ -1,7 +1,8 @@
 from openai_plugins import (openai_components_plugins_register,
-                            openai_install_plugins_load)
-from openai_plugins.adapter.adapter import ProcessesInfo
-from openai_plugins.callback import (callback_map)
+                            openai_install_plugins_load,
+                            openai_plugins_config)
+from openai_plugins.core.adapter import ProcessesInfo
+from openai_plugins.callback import (openai_plugin_loader)
 import asyncio
 import multiprocessing as mp
 import sys
@@ -24,8 +25,8 @@ async def main():
     openai_components_plugins_register()
     openai_install_plugins_load()
 
-    print(callback_map.callbacks_controller_adapter)
-    print(callback_map.callbacks_application_adapter)
+    print(openai_plugin_loader.callbacks_controller_adapter)
+    print(openai_plugin_loader.callbacks_application_adapter)
 
     import signal
 
@@ -94,39 +95,45 @@ async def main():
         )
         processes["webui"] = process
 
-    # openai_plugins 组件加载
-    app_adapters = callback_map.callbacks_application_adapter.get_callbacks()
-    for app_adapter in app_adapters:
-        processesInfo = ProcessesInfo(
-            model_name=args.model_name,
-            controller_address=args.controller_address,
-            log_level=log_level,
-            queue=queue,
-            completed_queue=completed_queue,
-            mp_manager=manager,
-        )
+    #  查询openai_plugins 组件
+    plugins_names = openai_plugins_config()
+    for plugins_name in plugins_names:
+        # openai_plugins 组件加载
+        app_adapters = openai_plugin_loader.callbacks_application_adapter.get_callbacks(plugins_name=plugins_name)
+        for app_adapter in app_adapters:
+            processesInfo = ProcessesInfo(
+                model_name=args.model_name,
+                controller_address=args.controller_address,
+                log_level=log_level,
+                queue=queue,
+                completed_queue=completed_queue,
+                mp_manager=manager,
+            )
 
-        app_adapter.init_processes(processesInfo=processesInfo)
+            app_adapter.init_processes(processesInfo=processesInfo)
 
-    control_adapters = callback_map.callbacks_controller_adapter.get_callbacks()
-    for control_adapter in control_adapters:
-        processesInfo = ProcessesInfo(
-            model_name=args.model_name,
-            controller_address=args.controller_address,
-            log_level=log_level,
-            queue=queue,
-            completed_queue=completed_queue,
-            mp_manager=manager,
-        )
+        control_adapters = openai_plugin_loader.callbacks_controller_adapter.get_callbacks(plugins_name=plugins_name)
+        for control_adapter in control_adapters:
+            processesInfo = ProcessesInfo(
+                model_name=args.model_name,
+                controller_address=args.controller_address,
+                log_level=log_level,
+                queue=queue,
+                completed_queue=completed_queue,
+                mp_manager=manager,
+            )
 
-        control_adapter.init_processes(processesInfo=processesInfo)
+            control_adapter.init_processes(processesInfo=processesInfo)
 
     try:
 
         # openai_plugins 组件启动
         try:
-            for app_adapter in app_adapters:
-                app_adapter.start()
+            for plugins_name in plugins_names:
+                # openai_plugins 组件加载
+                app_adapters = openai_plugin_loader.callbacks_application_adapter.get_callbacks(plugins_name=plugins_name)
+                for app_adapter in app_adapters:
+                    app_adapter.start()
         except Exception as e:
             logger.error(e)
             raise e
@@ -151,16 +158,19 @@ async def main():
             logger.info(f"收到切换模型的消息：{cmd}")
 
             if isinstance(cmd, list):
-                model_name, cmd, new_model_name, pid = cmd
+                plugins_name, model_name, cmd, new_model_name, pid = cmd
                 if cmd == "start":  # 运行新模型
-                    for control_adapter in control_adapters:
+                    for control_adapter in openai_plugin_loader.callbacks_controller_adapter.get_callbacks(
+                            plugins_name=plugins_name):
                         control_adapter.start(pid=pid, new_model_name=new_model_name)
                 elif cmd == "stop":
-                    for control_adapter in control_adapters:
+                    for control_adapter in openai_plugin_loader.callbacks_controller_adapter.get_callbacks(
+                            plugins_name=plugins_name):
                         control_adapter.stop(pid=pid, model_name=model_name)
 
                 elif cmd == "replace":
-                    for control_adapter in control_adapters:
+                    for control_adapter in openai_plugin_loader.callbacks_controller_adapter.get_callbacks(
+                            plugins_name=plugins_name):
                         control_adapter.replace(pid=pid, model_name=model_name, new_model_name=new_model_name)
 
     except Exception as e:
@@ -173,8 +183,11 @@ async def main():
 
         # openai_plugins 组件启动
         try:
-            for app_adapter in app_adapters:
-                app_adapter.stop()
+            for plugins_name in plugins_names:
+                # openai_plugins 组件加载
+                app_adapters = openai_plugin_loader.callbacks_application_adapter.get_callbacks(plugins_name=plugins_name)
+                for app_adapter in app_adapters:
+                    app_adapter.stop()
         except Exception as e:
             logger.error(e)
             raise e

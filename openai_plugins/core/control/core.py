@@ -1,21 +1,13 @@
-from typing import Optional, List
+from typing import List
 from abc import abstractmethod
-from openai_plugins.adapter.adapter import Adapter, LLMWorkerInfo, ProcessesInfo
+from openai_plugins.core.adapter.adapter import Adapter, LLMWorkerInfo, ProcessesInfo
 
 
-class ControllerAdapter(Adapter):
+class ControlAdapter(Adapter):
     processesInfo: ProcessesInfo = None
 
     def init_processes(self, processesInfo: ProcessesInfo):
         self.processesInfo = processesInfo
-
-    @abstractmethod
-    def list_running_models(self) -> List[LLMWorkerInfo]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_model_config(self, model_name) -> LLMWorkerInfo:
-        raise NotImplementedError
 
     @abstractmethod
     def start(self, new_model_name: str):

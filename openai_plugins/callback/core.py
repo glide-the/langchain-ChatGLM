@@ -1,97 +1,114 @@
-import inspect
-import os
-from collections import namedtuple
-from typing import Optional, Any, List, TypeVar, Type
+from abc import abstractmethod, ABC
+from typing import List, Dict, TypeVar, Generic, Type, Optional
 
-from openai_plugins.adapter.adapter import Adapter
-from openai_plugins.application import ApplicationAdapter
-from openai_plugins.controller import ControllerAdapter
+from openai_plugins.core.adapter import Adapter
+from openai_plugins.core.application import ApplicationAdapter
+from openai_plugins.core.control import ControlAdapter
+from openai_plugins.core.profile_endpoint import ProfileEndpointAdapter
+
+A = TypeVar("A", bound=Adapter)
 
 
 # 使用注册回调适配器
-class CallbackAdapter:
+class CallbackAdapter(Generic[A], ABC):
+    adapters_cls: Type[A]
+    _adapters: Optional[Dict[str, List[A]]] = None
 
-    def get_callbacks(self) -> List[Adapter]:
-        raise NotImplementedError
+    def __init__(self, adapters: Optional[Dict[str, List[A]]] = None):
+        if adapters is None:
+            self._adapters = self._build()
+        else:
+            self._adapters = adapters
 
-    def add_callback(self, callback_adapter: Adapter):
-        raise NotImplementedError
+    @abstractmethod
+    def _build(self) -> Dict[str, List[A]]:
+        """Build the adapters."""
 
-    def clear(self):
-        raise NotImplementedError
+    def get_callbacks(self, plugins_name: str) -> List[A]:
+        return self._adapters.get(plugins_name, [])
 
-    def remove(self, callback_adapter: Adapter):
-        raise NotImplementedError
+    def add_callback(self, plugins_name: str, callback_adapter: A):
+        if plugins_name in self._adapters:
+            self._adapters[plugins_name].append(callback_adapter)
+        else:
+            self._adapters[plugins_name] = [callback_adapter]
 
+    def clear(self, plugins_name: str):
+        if plugins_name in self._adapters:
+            self._adapters[plugins_name].clear()
+        else:
+            self._adapters[plugins_name] = []
 
-class ControllerCallbackAdapter(CallbackAdapter):
-    def __init__(self, callback_adapter: List[ControllerAdapter] = []):
-        super().__init__()
-        self._adapters = callback_adapter
-
-    def get_callbacks(self) -> List[ControllerAdapter]:
-        return self._adapters
-
-    def add_callback(self, callback_adapter: ControllerAdapter):
-        self._adapters.append(callback_adapter)
-
-    def clear(self):
-        self._adapters.clear()
-
-    def remove(self, callback_adapter: ControllerAdapter):
-        self._adapters.remove(callback_adapter)
-
-
-class ApplicationCallbackAdapter(CallbackAdapter):
-    def __init__(self, callback_adapter: List[ApplicationAdapter] = []):
-        super().__init__()
-        self._adapters = callback_adapter
-
-    def get_callbacks(self) -> List[ApplicationAdapter]:
-        return self._adapters
-
-    def add_callback(self, callback_adapter: ApplicationAdapter):
-        self._adapters.append(callback_adapter)
-
-    def clear(self):
-        self._adapters.clear()
-
-    def remove(self, callback_adapter: ApplicationAdapter):
-        self._adapters.remove(callback_adapter)
+    def remove(self, plugins_name: str, adapter_class_name: str):
+        if plugins_name in self._adapters:
+            for adapter in self._adapters[plugins_name]:
+                if adapter.class_name() == adapter_class_name:
+                    self._adapters[plugins_name].remove(adapter)
 
 
-class CallbackLoader:
-    callbacks_controller_adapter: ControllerCallbackAdapter = ControllerCallbackAdapter(callback_adapter=[])
-    callbacks_application_adapter: ApplicationCallbackAdapter = ApplicationCallbackAdapter(callback_adapter=[])
+class ControllerCallbackAdapter(CallbackAdapter[ControlAdapter]):
+    adapters_cls: Type[A] = ControlAdapter
+
+    def _build(self) -> Dict[str, List[ControlAdapter]]:
+        return {}
 
 
-callback_map = CallbackLoader()
+class ApplicationCallbackAdapter(CallbackAdapter[ApplicationAdapter]):
+    adapters_cls: Type[A] = ApplicationAdapter
+
+    def _build(self) -> Dict[str, List[ApplicationAdapter]]:
+        return {}
 
 
-def clear_callbacks():
-    callback_map.callbacks_controller_adapter.clear()
-    callback_map.callbacks_application_adapter.clear()
+class ProfileEndpointCallbackAdapter(CallbackAdapter[ProfileEndpointAdapter]):
+    adapters_cls: Type[A] = ProfileEndpointAdapter
+
+    def _build(self) -> Dict[str, List[ProfileEndpointAdapter]]:
+        return {}
 
 
-def add_callback(callbacks: CallbackAdapter, adapter: Adapter):
-    callbacks.add_callback(adapter)
+class OpenaiPluginsLoader:
+    callbacks_controller_adapter: ControllerCallbackAdapter = ControllerCallbackAdapter(adapters={})
+    callbacks_application_adapter: ApplicationCallbackAdapter = ApplicationCallbackAdapter(adapters={})
+    callbacks_profile_endpoint_adapter: ProfileEndpointCallbackAdapter = ProfileEndpointCallbackAdapter(adapters={})
 
 
-def remove_callback(callbacks: CallbackAdapter, adapter: Adapter):
-    callbacks.remove(adapter)
+openai_plugin_loader = OpenaiPluginsLoader()
 
 
-def remove_controller_callbacks_adapter(adapter: ControllerAdapter):
-    remove_callback(callback_map.callbacks_controller_adapter, adapter)
+# 以下是对外接口, 函数式编程
+
+def clear_callbacks(plugins_name: str):
+    openai_plugin_loader.callbacks_controller_adapter.clear(plugins_name=plugins_name)
+    openai_plugin_loader.callbacks_application_adapter.clear(plugins_name=plugins_name)
+    openai_plugin_loader.callbacks_profile_endpoint_adapter.clear(plugins_name=plugins_name)
 
 
-def register_controller_adapter(adapter: ControllerAdapter):
-    add_callback(callback_map.callbacks_controller_adapter, adapter)
+def remove_controller_callbacks_adapter(plugin_name: str, adapter_class_name: str):
+    openai_plugin_loader.callbacks_controller_adapter.remove(plugins_name=plugin_name,
+                                                             adapter_class_name=adapter_class_name)
 
 
-def remove_application_callbacks_adapter(adapter: ControllerAdapter):
-    remove_callback(callback_map.callbacks_application_adapter, adapter)
+def register_controller_adapter(plugins_name: str, adapter: ControlAdapter):
+    openai_plugin_loader.callbacks_controller_adapter.add_callback(plugins_name=plugins_name,
+                                                                   callback_adapter=adapter)
 
 
-def register_application_adapter(adapter: ControllerAdapter):
-    add_callback(callback_map.callbacks_application_adapter, adapter)
+def remove_application_callbacks_adapter(plugin_name: str, adapter_class_name: str):
+    openai_plugin_loader.callbacks_application_adapter.remove(plugins_name=plugin_name,
+                                                              adapter_class_name=adapter_class_name)
+
+
+def register_application_adapter(plugins_name: str, adapter: ApplicationAdapter):
+    openai_plugin_loader.callbacks_application_adapter.add_callback(plugins_name=plugins_name,
+                                                                    callback_adapter=adapter)
+
+
+def remove_profile_endpoint_callbacks_adapter(plugin_name: str, adapter_class_name: str):
+    openai_plugin_loader.callbacks_profile_endpoint_adapter.remove(plugins_name=plugin_name,
+                                                                   adapter_class_name=adapter_class_name)
+
+
+def register_profile_endpoint_adapter(plugins_name: str, adapter: ProfileEndpointAdapter):
+    openai_plugin_loader.callbacks_profile_endpoint_adapter.add_callback(plugins_name=plugins_name,
+                                                                         callback_adapter=adapter)

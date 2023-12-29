@@ -6,12 +6,14 @@ from openai_plugins.callback import register_controller_adapter
 
 
 def plugins_components_load(register_components_adapter,
+                            plugins_name: str,
                             module_path: str,
                             endpoint_components_file: str,
                             components_adapter: str):
     """
     openai components模块 加载
     :param register_components_adapter:  components模块注册函数
+    :param plugins_name: openai_plugins_list.json配置的plugins_name
     :param module_path:
     :param endpoint_components_file:
     :param components_adapter:
@@ -47,7 +49,7 @@ def plugins_components_load(register_components_adapter,
                     # 实例化components_adapter类
                     components_adapter_instance = components_adapter_class.from_config(cfg={})
                     # 注册components_adapter类
-                    register_components_adapter(components_adapter_instance)
+                    register_components_adapter(plugins_name=plugins_name, adapter=components_adapter_instance)
                     # 将模型的预加载时间和模型路径添加到node_prestartup_times列表中
                     node_openai_components_load_times.append((time.perf_counter() - time_before, module_path, True))
                 else:
