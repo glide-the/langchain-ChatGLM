@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Iterator, Optional
+from typing import TYPE_CHECKING, Dict, Iterator, Optional, List
 
 from configs import (logger)
 from openai_plugins.publish.core.resource import ResourceStatus
@@ -7,7 +7,8 @@ import xoscar as xo
 import time
 
 if TYPE_CHECKING:
-    from openai_plugins.publish.deploy_adapter_subscribe_actor import DeployAdapterSubscribeActor
+    from openai_plugins.publish.core.deploy_adapter_subscribe_actor import DeployAdapterSubscribeActor
+    from openai_plugins.publish.core.deploy_adapter_subscription_actor import DeployAdapterSubscriptionActor
 
 
 @dataclass
@@ -67,7 +68,11 @@ class ProfileEndpointPublishActor(xo.StatelessActor):
             "workers": self._subscribe_status,
         }
 
-    async def launch_adapters(
+    async def list_plugins(self) -> List[str]:
+        # 获取所有的插件
+        return list(self._plugins_name_to_subscribe.keys())
+
+    async def launch_subscribe(
             self,
             plugins_name: str,
             request_limits: Optional[int] = None,
@@ -77,7 +82,7 @@ class ProfileEndpointPublishActor(xo.StatelessActor):
             f"Enter launch_builtin_model, request_limits: {request_limits},  "
         )
 
-        async def _launch_one_model(_plugins_name):
+        async def _launch_one_subscribe(_plugins_name):
             if _plugins_name in self._plugins_name_to_subscribe:
                 raise ValueError(
                     f"Adapter is already in the Subscribe list, plugins_name: {_plugins_name}"
@@ -97,15 +102,15 @@ class ProfileEndpointPublishActor(xo.StatelessActor):
             )
 
         try:
-            await _launch_one_model(plugins_name)
+            await _launch_one_subscribe(plugins_name)
         except Exception:
             # terminate_model will remove the replica info.
-            await self.terminate_model(plugins_name, suppress_exception=True)
+            await self.terminate_subscribe(plugins_name, suppress_exception=True)
             raise
         return plugins_name
 
-    async def terminate_model(self, plugins_name: str, suppress_exception=False):
-        async def _terminate_one_model(_plugins_name):
+    async def terminate_subscribe(self, plugins_name: str, suppress_exception=False):
+        async def _terminate_one_subscribe(_plugins_name):
             subscribe_ref = self._plugins_name_to_subscribe.get(_plugins_name, None)
 
             if subscribe_ref is None:
@@ -120,12 +125,16 @@ class ProfileEndpointPublishActor(xo.StatelessActor):
             raise ValueError(f"Adapter not found in the Subscribe list, plugins_name: {plugins_name}")
 
         try:
-            await _terminate_one_model(plugins_name)
+            await _terminate_one_subscribe(plugins_name)
         except Exception:
             if not suppress_exception:
                 raise
 
         self._plugins_name_to_subscribe.pop(plugins_name, None)
+
+    async def get_subscribe(self, plugins_name: str) -> xo.ActorRefType["DeployAdapterSubscribeActor"]:
+
+        return self._plugins_name_to_subscribe.get(plugins_name, None)
 
     async def get_adapter(self, plugins_name: str) -> xo.ActorRefType["DeployAdapterSubscriptionActor"]:
         subscribe_ref = self._plugins_name_to_subscribe.get(plugins_name, None)
@@ -134,7 +143,7 @@ class ProfileEndpointPublishActor(xo.StatelessActor):
 
         return await subscribe_ref.get_adapter(plugins_name=plugins_name)
 
-    async def describe_model(self, plugins_name: str) -> str:
+    async def describe_adapter(self, plugins_name: str) -> str:
         subscribe_ref = self._plugins_name_to_subscribe.get(plugins_name, None)
         if subscribe_ref is None:
             raise ValueError(f"Adapter not found in the Subscribe list, plugins_name: {plugins_name}")
@@ -143,7 +152,7 @@ class ProfileEndpointPublishActor(xo.StatelessActor):
 
     async def add_openai_plugin_subscribe(self, subscribe_address: str):
         """ register subscribe to openai_plugins"""
-        from openai_plugins.publish.deploy_adapter_subscribe_actor import DeployAdapterSubscribeActor
+        from openai_plugins.publish.core.deploy_adapter_subscribe_actor import DeployAdapterSubscribeActor
 
         assert (
                 subscribe_address not in self._subscribe_address_to_plugins_subscribe

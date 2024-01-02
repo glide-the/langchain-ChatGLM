@@ -85,6 +85,9 @@ class DeployAdapterSubscriptionActor(xo.StatelessActor):
         )
         self._serve_count = 0
 
+    async def __pre_destroy__(self):
+        await self.stop()
+
     def plugins_name(self) -> str:
         return (
             self._plugins_name
@@ -143,34 +146,34 @@ class DeployAdapterSubscriptionActor(xo.StatelessActor):
         return await self._call_wrapper(_wrapper)
 
     @request_limit
-    async def start_model(self, pid: str, new_model_name: str):
+    async def start_model(self, new_model_name: str):
         if not hasattr(self._control_adapter, "start_model"):
             raise AttributeError(f"Adapter {self._control_adapter.class_name()} is not for start_model.")
 
         def _wrapper():
-            getattr(self._control_adapter, "start_model")(pid=pid, new_model_name=new_model_name)
+            getattr(self._control_adapter, "start_model")(new_model_name=new_model_name)
             return None
 
         return await self._call_wrapper(_wrapper)
 
     @request_limit
-    async def stop_model(self, pid: str, model_name: str):
+    async def stop_model(self, model_name: str):
         if not hasattr(self._control_adapter, "stop_model"):
             raise AttributeError(f"Adapter {self._control_adapter.class_name()} is not for stop_model.")
 
         def _wrapper():
-            getattr(self._control_adapter, "stop_model")(pid=pid, model_name=model_name)
+            getattr(self._control_adapter, "stop_model")(model_name=model_name)
             return None
 
         return await self._call_wrapper(_wrapper)
 
     @request_limit
-    async def replace_model(self, pid: str, model_name: str, new_model_name: str):
+    async def replace_model(self, model_name: str, new_model_name: str):
         if not hasattr(self._control_adapter, "replace_model"):
             raise AttributeError(f"Adapter {self._control_adapter.class_name()} is not for replace_model.")
 
         def _wrapper():
-            getattr(self._control_adapter, "replace_model")(pid=pid, model_name=model_name,
+            getattr(self._control_adapter, "replace_model")(model_name=model_name,
                                                             new_model_name=new_model_name)
             return None
 

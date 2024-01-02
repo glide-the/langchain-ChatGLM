@@ -1,12 +1,7 @@
-import json
-from typing import (TYPE_CHECKING,
-                    Dict,
+from typing import (Dict,
                     Optional)
 
 from openai_plugins.publish.core.resource import gather_node_info
-
-if TYPE_CHECKING:
-    from openai_plugins.core.adapter import Adapter
 
 from configs import (logger)
 import asyncio
@@ -19,7 +14,7 @@ import os
 import signal
 
 import platform
-from openai_plugins.publish.deploy_adapter_subscription_actor import DeployAdapterSubscriptionActor
+from openai_plugins.publish.core.deploy_adapter_subscription_actor import DeployAdapterSubscriptionActor
 from openai_plugins.utils import json_dumps
 
 DEFAULT_NODE_HEARTBEAT_INTERVAL = 5
@@ -95,7 +90,7 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
 
     async def __post_create__(self):
 
-        from openai_plugins.publish.profile_endpoint_publish_actor import ProfileEndpointPublishActor
+        from openai_plugins.publish.core.deploy_adapter_publish_actor import ProfileEndpointPublishActor
 
         self._publish_ref: xo.ActorRefType["ProfileEndpointPublishActor"] = await xo.actor_ref(
             address=self._publish_address, uid=ProfileEndpointPublishActor.uid()
@@ -107,7 +102,7 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
                     f"{init_openai_plugin_loader.plugins_name} ")
 
         async def singal_handler():
-            # await self._publish_ref.remove_worker(self.address)
+            await self._publish_ref.remove_openai_plugin_subscribe(self.address)
             os._exit(0)
 
         loop = asyncio.get_running_loop()
@@ -117,6 +112,12 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
 
     async def __pre_destroy__(self):
         self._upload_task.cancel()
+        _plugins_uid_to_adapter = self._plugins_uid_to_adapter.copy()
+        for plugins_name, adapter_ref in _plugins_uid_to_adapter.items():
+            try:
+                await self.terminate_adapter(plugins_name)
+            except Exception:
+                pass
 
     async def get_adapter_count(self) -> int:
         return len(self._plugins_uid_to_adapter)
@@ -178,6 +179,8 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
                 profile_endpoint_adapter=profile_endpoint_adapter,
                 request_limits=request_limits
             )
+
+            await adapter_ref.start()
         except:
             logger.error(f"Failed to load adapter {plugins_name}", exc_info=True)
 

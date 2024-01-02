@@ -1,5 +1,5 @@
 
-from typing import List, Optional
+from typing import Optional
 import multiprocessing as mp
 import pytest
 import pytest_asyncio
@@ -7,17 +7,12 @@ import xoscar as xo
 from xoscar import MainActorPoolType, create_actor_pool, get_pool_config
 import init_folder_config
 from launch_module import launch_utils
-import os
-import sys
 from openai_plugins.core.adapter import ProcessesInfo
-from openai_plugins.publish.deploy_adapter_subscribe_actor import (DeployAdapterSubscribeActor)
+from openai_plugins.publish.core.deploy_adapter_subscribe_actor import (DeployAdapterSubscribeActor)
 from openai_plugins import (openai_components_plugins_register,
                             openai_install_plugins_load,
                             openai_plugins_config)
 from openai_plugins.callback import (openai_plugin_loader)
-# 为了能使用fastchat_wrapper.py中的函数，需要将当前目录加入到sys.path中
-root_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(root_dir)
 
 args = launch_utils.args
 
