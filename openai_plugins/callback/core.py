@@ -1,5 +1,5 @@
 from abc import abstractmethod, ABC
-from typing import List, Dict, TypeVar, Generic, Type, Optional
+from typing import List, Dict, TypeVar, Generic, Type, Optional, Set
 
 from openai_plugins.core.adapter import Adapter
 from openai_plugins.core.application import ApplicationAdapter
@@ -68,6 +68,8 @@ class ProfileEndpointCallbackAdapter(CallbackAdapter[ProfileEndpointAdapter]):
 
 
 class OpenaiPluginsLoader:
+    # openai_plugins 组件加载,不重复加载
+    plugins_name: Set[str] = set()
     callbacks_controller_adapter: ControllerCallbackAdapter = ControllerCallbackAdapter(adapters={})
     callbacks_application_adapter: ApplicationCallbackAdapter = ApplicationCallbackAdapter(adapters={})
     callbacks_profile_endpoint_adapter: ProfileEndpointCallbackAdapter = ProfileEndpointCallbackAdapter(adapters={})
@@ -82,33 +84,43 @@ def clear_callbacks(plugins_name: str):
     openai_plugin_loader.callbacks_controller_adapter.clear(plugins_name=plugins_name)
     openai_plugin_loader.callbacks_application_adapter.clear(plugins_name=plugins_name)
     openai_plugin_loader.callbacks_profile_endpoint_adapter.clear(plugins_name=plugins_name)
+    openai_plugin_loader.plugins_name.remove(plugins_name)
 
 
 def remove_controller_callbacks_adapter(plugin_name: str, adapter_class_name: str):
     openai_plugin_loader.callbacks_controller_adapter.remove(plugins_name=plugin_name,
                                                              adapter_class_name=adapter_class_name)
+    if len(openai_plugin_loader.callbacks_controller_adapter.get_callbacks(plugins_name=plugin_name)) == 0:
+        openai_plugin_loader.plugins_name.remove(plugin_name)
 
 
 def register_controller_adapter(plugins_name: str, adapter: ControlAdapter):
     openai_plugin_loader.callbacks_controller_adapter.add_callback(plugins_name=plugins_name,
                                                                    callback_adapter=adapter)
+    openai_plugin_loader.plugins_name.add(plugins_name)
 
 
 def remove_application_callbacks_adapter(plugin_name: str, adapter_class_name: str):
     openai_plugin_loader.callbacks_application_adapter.remove(plugins_name=plugin_name,
                                                               adapter_class_name=adapter_class_name)
+    if len(openai_plugin_loader.callbacks_application_adapter.get_callbacks(plugins_name=plugin_name)) == 0:
+        openai_plugin_loader.plugins_name.remove(plugin_name)
 
 
 def register_application_adapter(plugins_name: str, adapter: ApplicationAdapter):
     openai_plugin_loader.callbacks_application_adapter.add_callback(plugins_name=plugins_name,
                                                                     callback_adapter=adapter)
+    openai_plugin_loader.plugins_name.add(plugins_name)
 
 
 def remove_profile_endpoint_callbacks_adapter(plugin_name: str, adapter_class_name: str):
     openai_plugin_loader.callbacks_profile_endpoint_adapter.remove(plugins_name=plugin_name,
                                                                    adapter_class_name=adapter_class_name)
+    if len(openai_plugin_loader.callbacks_profile_endpoint_adapter.get_callbacks(plugins_name=plugin_name)) == 0:
+        openai_plugin_loader.plugins_name.remove(plugin_name)
 
 
 def register_profile_endpoint_adapter(plugins_name: str, adapter: ProfileEndpointAdapter):
     openai_plugin_loader.callbacks_profile_endpoint_adapter.add_callback(plugins_name=plugins_name,
                                                                          callback_adapter=adapter)
+    openai_plugin_loader.plugins_name.add(plugins_name)

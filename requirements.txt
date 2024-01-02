@@ -77,3 +77,10 @@ watchdog>=3.0.0
 
 
 xoscar
+orjson
+pytest>=3.5.0
+pytest-cov>=2.5.0
+pytest-timeout>=1.2.0
+pytest-forked>=1.0
+pytest-asyncio>=0.14.0
+pytest-mock>=3.11.1

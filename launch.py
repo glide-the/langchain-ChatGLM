@@ -162,16 +162,16 @@ async def main():
                 if cmd == "start":  # 运行新模型
                     for control_adapter in openai_plugin_loader.callbacks_controller_adapter.get_callbacks(
                             plugins_name=plugins_name):
-                        control_adapter.start(pid=pid, new_model_name=new_model_name)
+                        control_adapter.start_model(pid=pid, new_model_name=new_model_name)
                 elif cmd == "stop":
                     for control_adapter in openai_plugin_loader.callbacks_controller_adapter.get_callbacks(
                             plugins_name=plugins_name):
-                        control_adapter.stop(pid=pid, model_name=model_name)
+                        control_adapter.stop_model(pid=pid, model_name=model_name)
 
                 elif cmd == "replace":
                     for control_adapter in openai_plugin_loader.callbacks_controller_adapter.get_callbacks(
                             plugins_name=plugins_name):
-                        control_adapter.replace(pid=pid, model_name=model_name, new_model_name=new_model_name)
+                        control_adapter.replace_model(pid=pid, model_name=model_name, new_model_name=new_model_name)
 
     except Exception as e:
         logger.error(e)

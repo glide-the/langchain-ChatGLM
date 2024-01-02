@@ -28,7 +28,7 @@ class FastChatControlAdapter(ControlAdapter):
         """Get class name."""
         return self.__name__
 
-    def start(self, new_model_name):
+    def start_model(self, new_model_name):
         logger.info(f"准备启动新模型进程：{new_model_name}")
         e = self.processesInfo.mp_manager.Event()
         process = Process(
@@ -47,7 +47,7 @@ class FastChatControlAdapter(ControlAdapter):
         e.wait()
         logger.info(f"成功启动新模型进程：{new_model_name}")
 
-    def stop(self, model_name: str):
+    def stop_model(self, model_name: str):
         if process := fastchat_process_dict.processes["model_worker"].get(model_name):
             time.sleep(1)
             process.terminate()
@@ -56,7 +56,7 @@ class FastChatControlAdapter(ControlAdapter):
         else:
             logger.error(f"未找到模型进程：{model_name}")
 
-    def replace(self, pid: str, model_name: str, new_model_name: str):
+    def replace_model(self, pid: str, model_name: str, new_model_name: str):
         e = self.processesInfo.mp_manager.Event()
         if process := fastchat_process_dict.processes["model_worker"].pop(model_name, None):
             logger.info(f"停止模型进程：{model_name}")

@@ -66,6 +66,7 @@ def get_model_config(
 
 
 def stop_llm_model(
+        plugins_name: str = Body(..., description="当前运行插件", examples=["fschat"]),
         model_name: str = Body(..., description="要停止的LLM模型名称", examples=[LLM_MODELS[0]])
 ) -> BaseResponse:
     """
@@ -73,12 +74,12 @@ def stop_llm_model(
     """
     # 创建一个控制标志，用于判断新的事件是否已经被处理
     new_pid = uuid.uuid4().hex
-    launch_mp_queue.shared_queue.put([model_name, "stop", None, new_pid])
+    launch_mp_queue.shared_queue.put([plugins_name, model_name, "stop", None, new_pid])
     # 等待事件处理完成
     while True:
         cmd = launch_mp_queue.shared_completed_queue.get()
 
-        model_name, command, new_model_name, pid = cmd
+        plugins_name, model_name, command, new_model_name, pid = cmd
         if command == "stopped" and new_pid == pid:
             break
         else:
@@ -88,21 +89,21 @@ def stop_llm_model(
 
 
 def change_llm_model(
+        plugins_name: str = Body(..., description="当前运行插件", examples=["fschat"]),
         model_name: str = Body(..., description="当前运行模型", examples=[LLM_MODELS[0]]),
         new_model_name: str = Body(..., description="要切换的新模型", examples=[LLM_MODELS[0]])
 ):
-    '''
+    """
     向信号队列发送切换LLM模型的信号，使用信号控制模型是否已经切换完成
-
-    '''
+    """
     # 创建一个控制标志，用于判断新的事件是否已经被处理
     new_pid = uuid.uuid4().hex
-    launch_mp_queue.shared_queue.put([model_name, "replace", new_model_name, new_pid])
+    launch_mp_queue.shared_queue.put([plugins_name, model_name, "replace", new_model_name, new_pid])
     # 等待事件处理完成
     while True:
         cmd = launch_mp_queue.shared_completed_queue.get()
 
-        model_name, command, new_model_name, pid = cmd
+        plugins_name, model_name, command, new_model_name, pid = cmd
         if command == "replaced" and new_pid == pid:
             break
         else:
