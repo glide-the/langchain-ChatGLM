@@ -13,42 +13,16 @@ from openai_plugins import (openai_components_plugins_register,
                             openai_plugins_config)
 from openai_plugins.callback import (openai_plugin_loader)
 from openai_plugins.deploy.subscribe import start_subscribe_components
-from openai_plugins.deploy.utils import create_subscribe_actor_pool
+from openai_plugins.deploy.utils import create_subscribe_actor_pool, get_timestamp_ms, get_log_file, init_openai_plugins
 from openai_plugins.publish.core.deploy_adapter_publish_actor import ProfileEndpointPublishActor
 import multiprocessing as mp
-from configs import (logger)
 from launch_module import launch_utils
+from openai_plugins.deploy.utils import get_config_dict
+from configs import LOG_BACKUP_COUNT, LOG_MAX_BYTES
+
 args = launch_utils.args
-
-
-TEST_LOGGING_CONF = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "formatter": {
-            "format": "%(asctime)s %(name)-12s %(process)d %(levelname)-8s %(message)s",
-        },
-    },
-    "handlers": {
-        "stream_handler": {
-            "class": "logging.StreamHandler",
-            "formatter": "formatter",
-            "level": "DEBUG",
-            "stream": "ext://sys.stderr",
-        },
-    },
-    "loggers": {
-        "xinference": {
-            "handlers": ["stream_handler"],
-            "level": "DEBUG",
-            "propagate": False,
-        }
-    },
-    "root": {
-        "level": "WARN",
-        "handlers": ["stream_handler"],
-    },
-}
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def api_health_check(endpoint: str, max_attempts: int, sleep_interval: int = 3):
@@ -124,56 +98,21 @@ def run_test_cluster_in_subprocess(
     return p
 
 
-def init_openai_plugins():
-    init_folder_config.init_folder_config()
-    openai_components_plugins_register()
-    openai_install_plugins_load()
-
-    manager = mp.Manager()
-
-    queue = manager.Queue()
-    completed_queue = manager.Queue()
-    log_level = "INFO"
-    #  查询openai_plugins 组件
-    plugins_names = openai_plugins_config()
-    for plugins_name in plugins_names:
-        # openai_plugins 组件加载
-        app_adapters = openai_plugin_loader.callbacks_application_adapter.get_callbacks(plugins_name=plugins_name)
-        for app_adapter in app_adapters:
-            processesInfo = ProcessesInfo(
-                model_name=args.model_name,
-                controller_address=args.controller_address,
-                log_level=log_level,
-                queue=queue,
-                completed_queue=completed_queue,
-                mp_manager=manager,
-            )
-
-            app_adapter.init_processes(processesInfo=processesInfo)
-
-        control_adapters = openai_plugin_loader.callbacks_controller_adapter.get_callbacks(plugins_name=plugins_name)
-        for control_adapter in control_adapters:
-            processesInfo = ProcessesInfo(
-                model_name=args.model_name,
-                controller_address=args.controller_address,
-                log_level=log_level,
-                queue=queue,
-                completed_queue=completed_queue,
-                mp_manager=manager,
-            )
-
-            control_adapter.init_processes(processesInfo=processesInfo)
-
-
 @pytest_asyncio.fixture
 def setup_publish():
     from openai_plugins.deploy.utils import health_check as cluster_health_check
     from openai_plugins.publish import run_in_subprocess as run_restful_api
-    logging.config.dictConfig(TEST_LOGGING_CONF)  # type: ignore
 
+    dict_config = get_config_dict(
+        "DEBUG",
+        get_log_file(f"local_{get_timestamp_ms()}"),
+        LOG_BACKUP_COUNT,
+        LOG_MAX_BYTES,
+    )
+    logging.config.dictConfig(dict_config)  # type: ignore
     publish_address = f"localhost:{xo.utils.get_next_port()}"
     local_cluster_proc = run_test_cluster_in_subprocess(
-        publish_address, TEST_LOGGING_CONF
+        publish_address, dict_config
     )
     if not cluster_health_check(publish_address, max_attempts=10, sleep_interval=3):
         raise RuntimeError("Cluster is not available after multiple attempts")
@@ -183,7 +122,7 @@ def setup_publish():
         publish_address,
         host="localhost",
         port=port,
-        logging_conf=TEST_LOGGING_CONF,
+        logging_conf=dict_config,
     )
     endpoint = f"http://localhost:{port}"
     if not api_health_check(endpoint, max_attempts=10, sleep_interval=5):
@@ -192,4 +131,3 @@ def setup_publish():
     yield f"http://localhost:{port}", publish_address
     local_cluster_proc.terminate()
     restful_api_proc.terminate()
-

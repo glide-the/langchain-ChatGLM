@@ -53,27 +53,15 @@ class FastChatApplicationAdapter(ApplicationAdapter):
     def init_processes(self, processesInfo: ProcessesInfo):
 
         self.processesInfo = processesInfo
-
-        if shared_cmd_options.cmd_opts.all_webui:
-            shared_cmd_options.cmd_opts.openai_api = True
-            shared_cmd_options.cmd_opts.model_worker = True
-            shared_cmd_options.cmd_opts.api_worker = True
-
-        elif shared_cmd_options.cmd_opts.all_api:
-            shared_cmd_options.cmd_opts.openai_api = True
-            shared_cmd_options.cmd_opts.model_worker = True
-            shared_cmd_options.cmd_opts.api_worker = True
-
-        elif shared_cmd_options.cmd_opts.llm_api:
-            shared_cmd_options.cmd_opts.openai_api = True
-            shared_cmd_options.cmd_opts.model_worker = True
-            shared_cmd_options.cmd_opts.api_worker = True
-
+        shared_cmd_options.cmd_opts.openai_api = True
+        shared_cmd_options.cmd_opts.model_worker = True
+        shared_cmd_options.cmd_opts.api_worker = True
         if shared_cmd_options.cmd_opts.lite:
             shared_cmd_options.cmd_opts.model_worker = False
 
         fastchat_process_dict.processes = {"online_api": {}, "model_worker": {}}
-        self.controller_started = processesInfo.mp_manager.Event()
+        fastchat_process_dict.mp_manager = mp.Manager()
+        self.controller_started = fastchat_process_dict.mp_manager.Event()
         if shared_cmd_options.cmd_opts.openai_api:
             process = Process(
                 target=run_controller,
@@ -94,7 +82,7 @@ class FastChatApplicationAdapter(ApplicationAdapter):
             for model_name in shared_cmd_options.cmd_opts.model_name:
                 config = get_model_worker_config(model_name)
                 if not config.get("online_api"):
-                    e = processesInfo.mp_manager.Event()
+                    e = fastchat_process_dict.mp_manager.Event()
                     self.model_worker_started.append(e)
                     process = Process(
                         target=run_model_worker,
@@ -102,7 +90,6 @@ class FastChatApplicationAdapter(ApplicationAdapter):
                         kwargs=dict(model_name=model_name,
                                     controller_address=shared_cmd_options.cmd_opts.controller_address,
                                     log_level=processesInfo.log_level,
-                                    q=processesInfo.queue,
                                     started_event=e),
                         daemon=True,
                     )
@@ -114,7 +101,7 @@ class FastChatApplicationAdapter(ApplicationAdapter):
                 if (config.get("online_api")
                         and config.get("worker_class")
                         and model_name in FSCHAT_MODEL_WORKERS):
-                    e = processesInfo.mp_manager.Event()
+                    e = None
                     self.model_worker_started.append(e)
                     process = Process(
                         target=run_model_worker,
@@ -122,7 +109,6 @@ class FastChatApplicationAdapter(ApplicationAdapter):
                         kwargs=dict(model_name=model_name,
                                     controller_address=shared_cmd_options.cmd_opts.controller_address,
                                     log_level=processesInfo.log_level,
-                                    q=processesInfo.queue,
                                     started_event=e),
                         daemon=True,
                     )

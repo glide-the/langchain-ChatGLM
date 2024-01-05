@@ -5,6 +5,7 @@ from openai_plugins.callback.core import (
     register_controller_adapter,
     register_application_adapter,
     register_profile_endpoint_adapter,
+    get_openai_plugin_loader
 )
 from openai_plugins.callback.bootstrap import bootstrap_register
 
@@ -18,6 +19,7 @@ __all__ = [
     "remove_controller_callbacks_adapter",
     "remove_application_callbacks_adapter",
     "openai_plugin_loader",
+    "get_openai_plugin_loader"
 ]
 
 

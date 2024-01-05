@@ -294,7 +294,6 @@ def run_model_worker(
         model_name: str = "",
         controller_address: str = "",
         log_level: str = "INFO",
-        q: mp.Queue = None,
         started_event: mp.Event = None,
 ):
     import uvicorn

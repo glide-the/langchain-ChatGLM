@@ -6,7 +6,7 @@ from fastapi import (APIRouter,
                      Response,
                      Request,
                      )
-from configs import (logger)
+import logging
 from openai_plugins.callback.bootstrap import Bootstrap
 import inspect
 import pprint
@@ -17,6 +17,8 @@ from openai_plugins.publish.core.deploy_adapter_publish_actor import ProfileEndp
 from starlette.responses import JSONResponse as StarletteJSONResponse
 import multiprocessing as mp
 from openai_plugins.utils import json_dumps
+
+logger = logging.getLogger(__name__)
 
 
 class JSONResponse(StarletteJSONResponse):
@@ -262,6 +264,8 @@ class RESTFulBootstrapBaseWeb(Bootstrap):
 def run(
         publish_address: str, host: str, port: int, logging_conf: Optional[dict] = None
 ):
+
+    # logging.config.dictConfig(logging_conf)  # type: ignore
     logger.info(f"Starting openai plugins at endpoint: http://{host}:{port}")
     try:
         api = RESTFulBootstrapBaseWeb(publish_address=publish_address, host=host, port=port)
@@ -274,6 +278,7 @@ def run(
 def run_in_subprocess(
         publish_address: str, host: str, port: int, logging_conf: Optional[dict] = None
 ) -> mp.Process:
+
     p = mp.Process(
         target=run, args=(publish_address, host, port, logging_conf)
     )

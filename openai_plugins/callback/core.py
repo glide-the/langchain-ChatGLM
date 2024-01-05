@@ -124,3 +124,7 @@ def register_profile_endpoint_adapter(plugins_name: str, adapter: ProfileEndpoin
     openai_plugin_loader.callbacks_profile_endpoint_adapter.add_callback(plugins_name=plugins_name,
                                                                          callback_adapter=adapter)
     openai_plugin_loader.plugins_name.add(plugins_name)
+
+
+def get_openai_plugin_loader():
+    return openai_plugin_loader

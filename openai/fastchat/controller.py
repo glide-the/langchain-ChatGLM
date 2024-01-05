@@ -30,14 +30,13 @@ class FastChatControlAdapter(ControlAdapter):
 
     def start_model(self, new_model_name):
         logger.info(f"准备启动新模型进程：{new_model_name}")
-        e = self.processesInfo.mp_manager.Event()
+        e = fastchat_process_dict.mp_manager.Event()
         process = Process(
             target=run_model_worker,
             name=f"model_worker - {new_model_name}",
             kwargs=dict(model_name=new_model_name,
                         controller_address=shared_cmd_options.cmd_opts.controller_address,
                         log_level=self.processesInfo.log_level,
-                        q=self.processesInfo.queue,
                         started_event=e),
             daemon=True,
         )
@@ -57,7 +56,7 @@ class FastChatControlAdapter(ControlAdapter):
             logger.error(f"未找到模型进程：{model_name}")
 
     def replace_model(self, pid: str, model_name: str, new_model_name: str):
-        e = self.processesInfo.mp_manager.Event()
+        e = fastchat_process_dict.mp_manager.Event()
         if process := fastchat_process_dict.processes["model_worker"].pop(model_name, None):
             logger.info(f"停止模型进程：{model_name}")
             start_time = datetime.now()
@@ -70,7 +69,6 @@ class FastChatControlAdapter(ControlAdapter):
                 kwargs=dict(model_name=new_model_name,
                             controller_address=shared_cmd_options.cmd_opts.controller_address,
                             log_level=self.processesInfo.log_level,
-                            q=self.processesInfo.queue,
                             started_event=e),
                 daemon=True,
             )

@@ -8,6 +8,7 @@ from xoscar import MainActorPoolType, create_actor_pool, get_pool_config
 import init_folder_config
 from launch_module import launch_utils
 from openai_plugins.core.adapter import ProcessesInfo
+from openai_plugins.deploy.utils import init_openai_plugins
 from openai_plugins.publish.core.deploy_adapter_subscribe_actor import (DeployAdapterSubscribeActor)
 from openai_plugins import (openai_components_plugins_register,
                             openai_install_plugins_load,
@@ -59,48 +60,11 @@ async def setup_pool():
 async def test_terminate_create_subpool_flag(setup_pool):
     pool = setup_pool
     addr = pool.external_address
-    init_folder_config.init_folder_config()
-    openai_components_plugins_register()
-    openai_install_plugins_load()
-
-    print(openai_plugin_loader.callbacks_controller_adapter)
-    print(openai_plugin_loader.callbacks_application_adapter)
 
     mp.set_start_method("spawn")
-    manager = mp.Manager()
 
-    queue = manager.Queue()
-    completed_queue = manager.Queue()
     log_level = "INFO"
-    #  查询openai_plugins 组件
-    plugins_names = openai_plugins_config()
-    for plugins_name in plugins_names:
-        # openai_plugins 组件加载
-        app_adapters = openai_plugin_loader.callbacks_application_adapter.get_callbacks(plugins_name=plugins_name)
-        for app_adapter in app_adapters:
-            processesInfo = ProcessesInfo(
-                model_name=args.model_name,
-                controller_address=args.controller_address,
-                log_level=log_level,
-                queue=queue,
-                completed_queue=completed_queue,
-                mp_manager=manager,
-            )
-
-            app_adapter.init_processes(processesInfo=processesInfo)
-
-        control_adapters = openai_plugin_loader.callbacks_controller_adapter.get_callbacks(plugins_name=plugins_name)
-        for control_adapter in control_adapters:
-            processesInfo = ProcessesInfo(
-                model_name=args.model_name,
-                controller_address=args.controller_address,
-                log_level=log_level,
-                queue=queue,
-                completed_queue=completed_queue,
-                mp_manager=manager,
-            )
-
-            control_adapter.init_processes(processesInfo=processesInfo)
+    init_openai_plugins(plugins_name="fastchat", log_level=log_level)
     worker: xo.ActorRefType["MockDeployAdapterSubscribeActor"] = await xo.create_actor(
         MockDeployAdapterSubscribeActor,
         address=addr,

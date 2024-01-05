@@ -1,22 +1,22 @@
 from typing import (Dict,
                     Optional)
 
+from openai_plugins.deploy.utils import init_openai_plugins
 from openai_plugins.publish.core.resource import gather_node_info
 
-from configs import (logger)
+import logging
 import asyncio
 import xoscar as xo
 from xoscar import MainActorPoolType
 
 from openai_plugins import openai_plugins_config
-from openai_plugins.callback import openai_plugin_loader as init_openai_plugin_loader
 import os
 import signal
 
 import platform
 from openai_plugins.publish.core.deploy_adapter_subscription_actor import DeployAdapterSubscriptionActor
 from openai_plugins.utils import json_dumps
-
+logger = logging.getLogger(__name__)
 DEFAULT_NODE_HEARTBEAT_INTERVAL = 5
 
 
@@ -38,7 +38,7 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
         self._main_pool.recover_sub_pool = self.recover_sub_pool
 
         # internal states.
-        self._plugins_uid_to_adapter: Dict[str, xo.ActorRefType["DeployAdapterSubscriptionActor"]] = {}
+        self._plugins_uid_to_adapter: Dict[str, DeployAdapterSubscriptionActor] = {}
         self._plugins_uid_to_adapter_spec: Dict[str, str] = {}
 
         self._plugins_uid_to_adapter_addr: Dict[str, str] = {}
@@ -98,8 +98,6 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
         await self._publish_ref.add_openai_plugin_subscribe(self.address)
         self._upload_task = asyncio.create_task(self._periodical_report_status())
         logger.info(f"openai_plugins worker {self.address} started")
-        logger.info(f"openai_plugin_loader plugins_name "
-                    f"{init_openai_plugin_loader.plugins_name} ")
 
         async def singal_handler():
             await self._publish_ref.remove_openai_plugin_subscribe(self.address)
@@ -151,41 +149,26 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
         if plugins_name not in plugins_names:
             raise ValueError(f"openai_plugins not found in the adapter list, uid: {plugins_name}")
 
-        # openai_plugins 组件加载
-        app_adapter = init_openai_plugin_loader.callbacks_application_adapter.get_callbacks(
-            plugins_name=plugins_name)[0]
-        control_adapter = init_openai_plugin_loader.callbacks_controller_adapter.get_callbacks(
-            plugins_name=plugins_name)[0]
-        profile_endpoint_adapter = init_openai_plugin_loader.callbacks_profile_endpoint_adapter.get_callbacks(
-            plugins_name=plugins_name)[0]
-
-        adapter_description = {
-            "app_adapter": app_adapter.state_dict,
-            "control_adapter": control_adapter.state_dict,
-            "profile_endpoint_adapter": profile_endpoint_adapter.state_dict
-        }
-
         subpool_address = await self._create_subpool()
 
         try:
-
             adapter_ref = await xo.create_actor(
                 DeployAdapterSubscriptionActor,
                 address=subpool_address,
                 uid=plugins_name,
                 plugins_name=plugins_name,
-                app_adapter=app_adapter,
-                control_adapter=control_adapter,
-                profile_endpoint_adapter=profile_endpoint_adapter,
                 request_limits=request_limits
             )
-
-            await adapter_ref.start()
-        except:
-            logger.error(f"Failed to load adapter {plugins_name}", exc_info=True)
+            from openai_plugins.callback import get_openai_plugin_loader   # 需要在这里导入，否则会报错
+            init_openai_plugin_loader = get_openai_plugin_loader()
+            await adapter_ref.load()
+            # await adapter_ref.start()
+            adapter_description = await adapter_ref.adapters_description()
+        except Exception as e:
+            logger.info(f"Failed to launch adapter {plugins_name}", exc_info=True)
 
             await self._main_pool.remove_sub_pool(subpool_address)
-            raise
+            raise e
 
         self._plugins_uid_to_adapter[plugins_name] = adapter_ref
         self._plugins_uid_to_adapter_spec[plugins_name] = json_dumps(adapter_description)
@@ -223,3 +206,4 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
         if adapter_desc is None:
             raise ValueError(f"openai_plugins not found in the adapter list, uid: {adapter_desc}")
         return adapter_desc
+

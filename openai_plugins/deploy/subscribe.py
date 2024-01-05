@@ -5,27 +5,26 @@ from typing import Any, Optional
 import xoscar as xo
 from xoscar import MainActorPoolType
 
-
 from openai_plugins.publish.core.deploy_adapter_subscribe_actor import DeployAdapterSubscribeActor
-
 
 logger = logging.getLogger(__name__)
 
 
 async def start_subscribe_components(
-    address: str, publish_address: str, main_pool: MainActorPoolType
+        address: str, publish_address: str, main_pool: MainActorPoolType
 ):
-     await xo.create_actor(
+    subscribe_ref = await xo.create_actor(
         DeployAdapterSubscribeActor,
         address=address,
         uid=DeployAdapterSubscribeActor.uid(),
         publish_address=publish_address,
         main_pool=main_pool
     )
+    return subscribe_ref
 
 
 async def _start_subscribe(
-    address: str, publish_address: str, logging_conf: Any = None
+        address: str, publish_address: str, logging_conf: Any = None
 ):
     from openai_plugins.deploy.utils import create_subscribe_actor_pool
 

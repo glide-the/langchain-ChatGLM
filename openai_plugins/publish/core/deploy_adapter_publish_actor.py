@@ -1,14 +1,16 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Iterator, Optional, List
 
-from configs import (logger)
 from openai_plugins.publish.core.resource import ResourceStatus
 import xoscar as xo
 import time
-
+import logging
 if TYPE_CHECKING:
     from openai_plugins.publish.core.deploy_adapter_subscribe_actor import DeployAdapterSubscribeActor
     from openai_plugins.publish.core.deploy_adapter_subscription_actor import DeployAdapterSubscriptionActor
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -103,10 +105,11 @@ class ProfileEndpointPublishActor(xo.StatelessActor):
 
         try:
             await _launch_one_subscribe(plugins_name)
-        except Exception:
+        except Exception as e:
             # terminate_model will remove the replica info.
+            logger.error(f"Failed to launch subscribe {plugins_name}", exc_info=True)
             await self.terminate_subscribe(plugins_name, suppress_exception=True)
-            raise
+            raise e
         return plugins_name
 
     async def terminate_subscribe(self, plugins_name: str, suppress_exception=False):
@@ -126,9 +129,9 @@ class ProfileEndpointPublishActor(xo.StatelessActor):
 
         try:
             await _terminate_one_subscribe(plugins_name)
-        except Exception:
+        except Exception as e:
             if not suppress_exception:
-                raise
+                raise e
 
         self._plugins_name_to_subscribe.pop(plugins_name, None)
 

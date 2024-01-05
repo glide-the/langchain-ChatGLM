@@ -6,13 +6,18 @@ from typing import (
     TYPE_CHECKING, Optional, Callable,
 )
 
+import logging
+
+from openai_plugins.deploy.utils import init_openai_plugins
+
 if TYPE_CHECKING:
     from openai_plugins.callback.core import ApplicationAdapter
     from openai_plugins.callback.core import ControlAdapter
     from openai_plugins.callback.core import ProfileEndpointAdapter
-from configs import logger
+
 from openai_plugins.utils import json_dumps
 
+logger = logging.getLogger(__name__)
 try:
     from torch.cuda import OutOfMemoryError
 except ImportError:
@@ -34,7 +39,7 @@ def request_limit(fn):
     async def wrapped_func(self, *args, **kwargs):
         logger.debug(
             f"Request {fn.__name__}, current serve request count: {self._serve_count}, request limit:"
-            f" {self._request_limits} for the model {self.model_uid()}"
+            f" {self._request_limits} for the model {self.plugins_name()}"
         )
         if self._request_limits is not None:
             if 1 + self._serve_count <= self._request_limits:
@@ -59,31 +64,51 @@ def request_limit(fn):
 
 
 class DeployAdapterSubscriptionActor(xo.StatelessActor):
+    # class DeployAdapterSubscriptionActor:
 
     def __init__(self,
                  plugins_name: str,
-                 app_adapter: "ApplicationAdapter",
-                 control_adapter: "ControlAdapter",
-                 profile_endpoint_adapter: "ProfileEndpointAdapter",
                  request_limits: Optional[int] = None):
         super().__init__()
+        self._adapter_description = None
+        self._profile_endpoint_adapter = None
+        self._control_adapter = None
+        self._app_adapter = None
         self._plugins_name = plugins_name
+        self._request_limits = request_limits
+        self._lock = asyncio.locks.Lock()
+        self._serve_count = 0
+
+    async def load(self):
+        init_openai_plugins(plugins_name=self.plugins_name())
+        from openai_plugins.callback import get_openai_plugin_loader  # 需要在这里导入，否则会报错
+        openai_plugin_loader = get_openai_plugin_loader()
+        logger.info(f"openai_plugin_loader plugins_name "
+                    f"{self.plugins_name()} ")
+
+        logger.info(f"openai_plugin_loader plugins_name "
+                    f"{self.plugins_name()} ")
+        # openai_plugins 组件加载
+        app_adapter = openai_plugin_loader.callbacks_application_adapter.get_callbacks(
+            plugins_name=self.plugins_name())[0]
+        control_adapter = openai_plugin_loader.callbacks_controller_adapter.get_callbacks(
+            plugins_name=self.plugins_name())[0]
+        profile_endpoint_adapter = openai_plugin_loader.callbacks_profile_endpoint_adapter.get_callbacks(
+            plugins_name=self.plugins_name())[0]
+        # openai_plugins 组件加载
         self._app_adapter = app_adapter
         self._control_adapter = control_adapter
         self._profile_endpoint_adapter = profile_endpoint_adapter
-        self._request_limits = request_limits
-        self._lock = (
-            None
-            if isinstance(self._app_adapter, ApplicationAdapter) or
 
-               isinstance(self._control_adapter, ControlAdapter) or
+        self._adapter_description = {
+            "app_adapter": self._app_adapter.state_dict,
+            "control_adapter": self._control_adapter.state_dict,
+            "profile_endpoint_adapter": self._profile_endpoint_adapter.state_dict
+        }
 
-               isinstance(self._profile_endpoint_adapter,
-                          ProfileEndpointAdapter)
+    async def adapters_description(self) -> dict:
 
-            else asyncio.locks.Lock()
-        )
-        self._serve_count = 0
+        return self._adapter_description
 
     async def __pre_destroy__(self):
         await self.stop()
@@ -125,14 +150,8 @@ class DeployAdapterSubscriptionActor(xo.StatelessActor):
 
     @request_limit
     async def start(self):
-        if not hasattr(self._app_adapter, "start"):
-            raise AttributeError(f"Adapter {self._app_adapter.class_name()} is not for start.")
-
-        def _wrapper():
-            getattr(self._app_adapter, "start")()
-            return None
-
-        return await self._call_wrapper(_wrapper)
+        self._app_adapter.start()
+        return None
 
     @request_limit
     async def stop(self):
@@ -182,7 +201,8 @@ class DeployAdapterSubscriptionActor(xo.StatelessActor):
     @request_limit
     def list_running_models(self):
         if not hasattr(self._profile_endpoint_adapter, "list_running_models"):
-            raise AttributeError(f"Adapter {self._profile_endpoint_adapter.class_name()} is not for list_running_models.")
+            raise AttributeError(
+                f"Adapter {self._profile_endpoint_adapter.class_name()} is not for list_running_models.")
 
         def _wrapper():
             data = getattr(self._profile_endpoint_adapter, "list_running_models")()
