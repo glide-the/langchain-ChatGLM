@@ -64,7 +64,6 @@ def request_limit(fn):
 
 
 class DeployAdapterSubscriptionActor(xo.StatelessActor):
-    # class DeployAdapterSubscriptionActor:
 
     def __init__(self,
                  plugins_name: str,
@@ -78,6 +77,10 @@ class DeployAdapterSubscriptionActor(xo.StatelessActor):
         self._request_limits = request_limits
         self._lock = asyncio.locks.Lock()
         self._serve_count = 0
+
+    @classmethod
+    def uid(cls) -> str:
+        return "subscription"
 
     async def load(self):
         init_openai_plugins(plugins_name=self.plugins_name())

@@ -13,14 +13,13 @@ logger = logging.getLogger(__name__)
 async def start_subscribe_components(
         address: str, publish_address: str, main_pool: MainActorPoolType
 ):
-    subscribe_ref = await xo.create_actor(
+    await xo.create_actor(
         DeployAdapterSubscribeActor,
         address=address,
         uid=DeployAdapterSubscribeActor.uid(),
         publish_address=publish_address,
         main_pool=main_pool
     )
-    return subscribe_ref
 
 
 async def _start_subscribe(

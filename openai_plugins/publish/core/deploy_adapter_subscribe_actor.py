@@ -1,5 +1,5 @@
 from typing import (Dict,
-                    Optional)
+                    Optional, Any)
 
 from openai_plugins.deploy.utils import init_openai_plugins
 from openai_plugins.publish.core.resource import gather_node_info
@@ -16,6 +16,7 @@ import signal
 import platform
 from openai_plugins.publish.core.deploy_adapter_subscription_actor import DeployAdapterSubscriptionActor
 from openai_plugins.utils import json_dumps
+
 logger = logging.getLogger(__name__)
 DEFAULT_NODE_HEARTBEAT_INTERVAL = 5
 
@@ -38,8 +39,8 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
         self._main_pool.recover_sub_pool = self.recover_sub_pool
 
         # internal states.
-        self._plugins_uid_to_adapter: Dict[str, DeployAdapterSubscriptionActor] = {}
-        self._plugins_uid_to_adapter_spec: Dict[str, str] = {}
+        self._plugins_uid_to_adapter: Dict[str, xo.ActorRefType["DeployAdapterSubscriptionActor"]] = {}
+        self._plugins_uid_to_adapter_spec: Dict[str, Dict[str, Any]] = {}
 
         self._plugins_uid_to_adapter_addr: Dict[str, str] = {}
         self._plugins_uid_to_adapter_launch_args: Dict[str, Dict] = {}
@@ -55,7 +56,7 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
                     await self.terminate_adapter(model_uid)
                 except Exception:
                     pass
-                await self.launch_adapters(**launch_args)
+                await self.launch_adapters(plugins_name=model_uid, request_limits=launch_args.get("request_limits"))
                 break
 
     async def report_status(self):
@@ -86,7 +87,7 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
 
     @classmethod
     def uid(cls) -> str:
-        return "worker"
+        return "subscribe"
 
     async def __post_create__(self):
 
@@ -98,24 +99,19 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
         await self._publish_ref.add_openai_plugin_subscribe(self.address)
         self._upload_task = asyncio.create_task(self._periodical_report_status())
         logger.info(f"openai_plugins worker {self.address} started")
-
-        async def singal_handler():
-            await self._publish_ref.remove_openai_plugin_subscribe(self.address)
-            os._exit(0)
-
-        loop = asyncio.get_running_loop()
-        loop.add_signal_handler(
-            signal.SIGINT, lambda: asyncio.create_task(singal_handler())
-        )
+        # 跳过键盘中断，使用xoscar的信号处理
+        signal.signal(signal.SIGINT, lambda *_: None)
 
     async def __pre_destroy__(self):
-        self._upload_task.cancel()
         _plugins_uid_to_adapter = self._plugins_uid_to_adapter.copy()
         for plugins_name, adapter_ref in _plugins_uid_to_adapter.items():
             try:
                 await self.terminate_adapter(plugins_name)
             except Exception:
                 pass
+
+        self._upload_task.cancel()
+        await self._publish_ref.remove_openai_plugin_subscribe(self.address)
 
     async def get_adapter_count(self) -> int:
         return len(self._plugins_uid_to_adapter)
@@ -159,7 +155,7 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
                 plugins_name=plugins_name,
                 request_limits=request_limits
             )
-            from openai_plugins.callback import get_openai_plugin_loader   # 需要在这里导入，否则会报错
+            from openai_plugins.callback import get_openai_plugin_loader  # 需要在这里导入，否则会报错
             init_openai_plugin_loader = get_openai_plugin_loader()
             await adapter_ref.load()
             # await adapter_ref.start()
@@ -171,7 +167,7 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
             raise e
 
         self._plugins_uid_to_adapter[plugins_name] = adapter_ref
-        self._plugins_uid_to_adapter_spec[plugins_name] = json_dumps(adapter_description)
+        self._plugins_uid_to_adapter_spec[plugins_name] = adapter_description
         self._plugins_uid_to_adapter_addr[plugins_name] = subpool_address
         self._plugins_uid_to_adapter_launch_args[plugins_name] = launch_args
 
@@ -195,13 +191,21 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
             del self._plugins_uid_to_adapter_addr[plugins_name]
             del self._plugins_uid_to_adapter_launch_args[plugins_name]
 
+    async def list_adapters(self) -> Dict[str, Dict[str, Any]]:
+        ret = {}
+
+        items = list(self._plugins_uid_to_adapter_spec.items())
+        for k, v in items:
+            ret[k] = v.copy()
+        return ret
+
     def get_adapter(self, plugins_name: str) -> xo.ActorRefType["DeployAdapterSubscriptionActor"]:
         adapter_ref = self._plugins_uid_to_adapter.get(plugins_name, None)
         if adapter_ref is None:
             raise ValueError(f"openai_plugins not found in the adapter list, uid: {plugins_name}")
         return adapter_ref
 
-    def describe_adapter(self, plugins_name: str) -> str:
+    def describe_adapter(self, plugins_name: str) -> Dict[str, Any]:
         adapter_desc = self._plugins_uid_to_adapter_spec.get(plugins_name, None)
         if adapter_desc is None:
             raise ValueError(f"openai_plugins not found in the adapter list, uid: {adapter_desc}")

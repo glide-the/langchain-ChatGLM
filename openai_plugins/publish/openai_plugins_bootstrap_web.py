@@ -17,6 +17,7 @@ from openai_plugins.publish.core.deploy_adapter_publish_actor import ProfileEndp
 from starlette.responses import JSONResponse as StarletteJSONResponse
 import multiprocessing as mp
 from openai_plugins.utils import json_dumps
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class RESTFulBootstrapBaseWeb(Bootstrap):
         self._publish_ref = None
         self._router = APIRouter()
         self._app = FastAPI()
+        self._server_thread = None
 
     @classmethod
     def from_config(cls, cfg=None):
@@ -141,7 +143,15 @@ class RESTFulBootstrapBaseWeb(Bootstrap):
             app=self._app, host=self._host, port=self._port, log_config=logging_conf
         )
         server = Server(config)
-        server.run()
+
+        def run_server():
+            server.run()
+
+        self._server_thread = threading.Thread(target=run_server)
+        self._server_thread.start()
+
+    async def join(self):
+        await self._server_thread.join()
 
     async def get_status(self) -> JSONResponse:
         try:
@@ -264,12 +274,12 @@ class RESTFulBootstrapBaseWeb(Bootstrap):
 def run(
         publish_address: str, host: str, port: int, logging_conf: Optional[dict] = None
 ):
-
     # logging.config.dictConfig(logging_conf)  # type: ignore
     logger.info(f"Starting openai plugins at endpoint: http://{host}:{port}")
     try:
         api = RESTFulBootstrapBaseWeb(publish_address=publish_address, host=host, port=port)
         api.serve(logging_conf=logging_conf)
+        return api
     except SystemExit:
         logger.warning("Failed to create socket with port %d", port)
         raise
@@ -278,7 +288,6 @@ def run(
 def run_in_subprocess(
         publish_address: str, host: str, port: int, logging_conf: Optional[dict] = None
 ) -> mp.Process:
-
     p = mp.Process(
         target=run, args=(publish_address, host, port, logging_conf)
     )
