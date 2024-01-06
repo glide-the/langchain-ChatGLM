@@ -73,11 +73,6 @@ class RESTFulBootstrapBaseWeb(Bootstrap):
         self._router.add_api_route(
             "/v1/launch_subscribe/{plugins_name}", self.describe_adapter, methods=["GET"]
         )
-
-        self._router.add_api_route(
-            "/v1/launch_subscribe/{plugins_name}", self.terminate_subscribe, methods=["DELETE"]
-        )
-
         self._router.add_api_route(
             "/v1/launch_subscribe/{plugins_name}/start", self.start, methods=["POST"]
         )
@@ -195,14 +190,6 @@ class RESTFulBootstrapBaseWeb(Bootstrap):
         try:
             adapter_description = await (await self._get_publish_ref()).describe_adapter(plugins_name)
             return JSONResponse(content={"adapter_description": adapter_description})
-        except Exception as e:
-            logger.error(str(e), exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
-
-    async def terminate_subscribe(self, plugins_name: str) -> JSONResponse:
-        try:
-            await (await self._get_publish_ref()).terminate_subscribe(plugins_name)
-            return JSONResponse(content={"plugins_name": plugins_name})
         except Exception as e:
             logger.error(str(e), exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
