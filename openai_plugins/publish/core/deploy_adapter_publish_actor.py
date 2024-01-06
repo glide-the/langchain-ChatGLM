@@ -5,6 +5,7 @@ from openai_plugins.publish.core.resource import ResourceStatus
 import xoscar as xo
 import time
 import logging
+import asyncio
 if TYPE_CHECKING:
     from openai_plugins.publish.core.deploy_adapter_subscribe_actor import DeployAdapterSubscribeActor
     from openai_plugins.publish.core.deploy_adapter_subscription_actor import DeployAdapterSubscriptionActor
@@ -33,7 +34,8 @@ class ProfileEndpointPublishActor(xo.StatelessActor):
         self._plugins_name_to_subscribe: Dict[
             str, xo.ActorRefType["DeployAdapterSubscribeActor"]
         ] = {}
-
+        # TODO launch_subscribe时，需要加锁，防止多个请求同时创建同一个模型
+        self._locks = {}
         self._uptime = None
 
     @classmethod

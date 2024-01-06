@@ -55,7 +55,7 @@ class FastChatControlAdapter(ControlAdapter):
         else:
             logger.error(f"未找到模型进程：{model_name}")
 
-    def replace_model(self, pid: str, model_name: str, new_model_name: str):
+    def replace_model(self, model_name: str, new_model_name: str):
         e = fastchat_process_dict.mp_manager.Event()
         if process := fastchat_process_dict.processes["model_worker"].pop(model_name, None):
             logger.info(f"停止模型进程：{model_name}")

@@ -239,20 +239,20 @@ class RESTFulBootstrapBaseWeb(Bootstrap):
             logger.error(str(e), exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
-    async def list_running_models(self, plugins_name: str) -> JSONResponse:
+    async def list_running_models(self, plugins_name: str) -> Response:
         try:
             adapter = await (await self._get_publish_ref()).get_adapter(plugins_name)
             data = await adapter.list_running_models()
-            return JSONResponse(content={"data": data})
+            return Response(data, media_type="application/json")
         except Exception as e:
             logger.error(str(e), exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
-    async def get_model_config(self, plugins_name: str, model_name: str) -> JSONResponse:
+    async def get_model_config(self, plugins_name: str, model_name: str) -> Response:
         try:
             adapter = await (await self._get_publish_ref()).get_adapter(plugins_name)
             data = await adapter.get_model_config(model_name=model_name)
-            return JSONResponse(content={"data": data})
+            return Response(data, media_type="application/json")
         except Exception as e:
             logger.error(str(e), exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))

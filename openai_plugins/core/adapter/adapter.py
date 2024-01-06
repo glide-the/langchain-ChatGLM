@@ -2,28 +2,14 @@ from abc import abstractmethod
 from argparse import Namespace
 from typing import Optional, List
 import multiprocessing as mp
+from typing_extensions import Literal, NotRequired, TypedDict
 
 
-class LLMWorkerInfo:
-    def __init__(
-            self,
-            worker_id: Optional[str],
-            model_name: Optional[str],
-            model_description: Optional[str],
-            model_extra_info: Optional[str],
-    ):
-        self.worker_id = worker_id
-        self.model_name = model_name
-        self.model_description = model_description
-        self.model_extra_info = model_extra_info
-
-    def to_dict(self):
-        return {
-            "worker_id": self.worker_id,
-            "model_name": self.model_name,
-            "model_description": self.model_description,
-            "model_extra_info": self.model_extra_info
-        }
+class LLMWorkerInfo(TypedDict):
+    worker_id: Optional[str]
+    model_name: Optional[str]
+    model_description: Optional[str]
+    model_extra_info: Optional[str]
 
 
 class ProcessesInfo:
