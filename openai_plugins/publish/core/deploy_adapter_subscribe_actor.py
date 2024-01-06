@@ -1,9 +1,9 @@
 from typing import (Dict,
-                    Optional, Any)
+                    Optional, Any, List)
 
 from openai_plugins.deploy.utils import init_openai_plugins
 from openai_plugins.publish.core.resource import gather_node_info
-
+import concurrent.futures as futures
 import logging
 import asyncio
 import xoscar as xo
@@ -34,6 +34,7 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
         super().__init__()
         self._publish_address = publish_address
         self._publish_ref = None
+        self._plugins_names = None
 
         self._main_pool = main_pool
         self._main_pool.recover_sub_pool = self.recover_sub_pool
@@ -46,18 +47,27 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
         self._plugins_uid_to_adapter_launch_args: Dict[str, Dict] = {}
 
     async def recover_sub_pool(self, address):
-        """子线程池恢复"""
-        logger.warning("Process %s is down, create adapter.", address)
-        for model_uid, addr in self._plugins_uid_to_adapter_addr.items():
-            if addr == address:
-                launch_args = self._plugins_uid_to_adapter_launch_args.get(model_uid)
-                try:
-                    # 销毁adapter
-                    await self.terminate_adapter(model_uid)
-                except Exception:
-                    pass
-                await self.launch_adapters(plugins_name=model_uid, request_limits=launch_args.get("request_limits"))
-                break
+        """子线程池恢复,TODO 如果开启了多个子线程池，终止一个子线程池，导致这个地址一直重新启动，这里无法判断是否是被删除的子线程池
+        所以 create_subscribe_actor_pool 的auto_recover从 auto_recover="process"改为False，不自动恢复
+            await xo.create_actor_pool(
+                address=address,
+                n_process=0,
+                auto_recover=False,
+                subprocess_start_method=subprocess_start_method,
+                logging_conf={"dict": logging_conf},
+            )
+        """
+        # logger.warning("Process %s is down, create adapter.", address)
+        # for model_uid, addr in self._plugins_uid_to_adapter_addr.items():
+        #     if addr == address:
+        #         launch_args = self._plugins_uid_to_adapter_launch_args.get(model_uid)
+        #         try:
+        #             # 销毁adapter
+        #             await self.terminate_adapter(model_uid)
+        #         except Exception:
+        #             pass
+        #         await self.launch_adapters(plugins_name=model_uid, request_limits=launch_args.get("request_limits"))
+        #         break
 
     async def report_status(self):
         """心跳上报"""
@@ -99,6 +109,10 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
         await self._publish_ref.add_openai_plugin_subscribe(self.address)
         self._upload_task = asyncio.create_task(self._periodical_report_status())
         logger.info(f"openai_plugins worker {self.address} started")
+        #  查询openai_plugins 组件
+        plugins_names = openai_plugins_config()
+        self._plugins_names = plugins_names
+        logger.info(f"openai_plugins worker {self.address} plugins_names: {plugins_names}")
         # 跳过键盘中断，使用xoscar的信号处理
         signal.signal(signal.SIGINT, lambda *_: None)
 
@@ -115,6 +129,10 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
 
     async def get_adapter_count(self) -> int:
         return len(self._plugins_uid_to_adapter)
+
+    async def get_plugins_names(self) -> List[str]:
+
+        return self._plugins_names
 
     async def _create_subpool(
             self
@@ -155,15 +173,13 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
                 plugins_name=plugins_name,
                 request_limits=request_limits
             )
-            from openai_plugins.callback import get_openai_plugin_loader  # 需要在这里导入，否则会报错
-            init_openai_plugin_loader = get_openai_plugin_loader()
             await adapter_ref.load()
             # await adapter_ref.start()
             adapter_description = await adapter_ref.adapters_description()
         except Exception as e:
             logger.info(f"Failed to launch adapter {plugins_name}", exc_info=True)
-
-            await self._main_pool.remove_sub_pool(subpool_address)
+            process = self._main_pool.sub_processes[subpool_address]
+            await self._main_pool.stop_sub_pool(address=subpool_address, process=process, force=True)
             raise e
 
         self._plugins_uid_to_adapter[plugins_name] = adapter_ref
@@ -184,7 +200,27 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
             )
         try:
             subpool_address = self._plugins_uid_to_adapter_addr[plugins_name]
+            process = self._main_pool.sub_processes[subpool_address]
+            # await self._main_pool.stop_sub_pool(address=subpool_address, process=process)
+
+            try:
+                os.kill(process.pid, signal.SIGINT)  # type: ignore
+            except OSError:  # pragma: no cover
+                pass
+            process.terminate()
+            wait_pool = futures.ThreadPoolExecutor(1)
+            try:
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(wait_pool, process.join, 3)
+            finally:
+                wait_pool.shutdown(False)
+            process.kill()
+            await asyncio.to_thread(process.join, 5)
             await self._main_pool.remove_sub_pool(subpool_address)
+        except Exception as e:
+            logger.debug(
+                "Stop sub pool failed, adapter uid: %s, error: %s", plugins_name, e
+            )
         finally:
             del self._plugins_uid_to_adapter[plugins_name]
             del self._plugins_uid_to_adapter_spec[plugins_name]
@@ -210,4 +246,3 @@ class DeployAdapterSubscribeActor(xo.StatelessActor):
         if adapter_desc is None:
             raise ValueError(f"openai_plugins not found in the adapter list, uid: {adapter_desc}")
         return adapter_desc
-

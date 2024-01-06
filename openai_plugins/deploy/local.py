@@ -63,6 +63,7 @@ def run_in_subprocess(
     multiprocessing.set_start_method(method="spawn", force=True)
     p = multiprocessing.Process(target=run, args=(address, logging_conf))
     p.start()
+    return p
 
 
 def main(host: str, port: int, logging_conf: Optional[Dict] = None):
@@ -83,7 +84,7 @@ def main(host: str, port: int, logging_conf: Optional[Dict] = None):
     signal.signal(signal.SIGINT, handler("SIGINT"))
     signal.signal(signal.SIGTERM, handler("SIGTERM"))
     try:
-        run_in_subprocess(publish_address, logging_conf)
+        run_process = run_in_subprocess(publish_address, logging_conf)
 
         if not health_check(
                 address=publish_address,
@@ -119,13 +120,10 @@ def main(host: str, port: int, logging_conf: Optional[Dict] = None):
             subscribe_ref: xo.ActorRefType["DeployAdapterSubscribeActor"] = await xo.actor_ref(
                 address=publish_address, uid=DeployAdapterSubscribeActor.uid()
             )
-            # # 获取所有适配器
-            # adapters = await subscribe_ref.list_adapters()
-            # for adapter in adapters:
-            #     await subscribe_ref.terminate_adapter(adapter)
             await xo.destroy_actor(subscribe_ref)
             await asyncio.sleep(1)
             await xo.destroy_actor(publish_ref)
+            run_process.terminate()
             logger.warning("All processes stopped")
 
         loop = asyncio.new_event_loop()

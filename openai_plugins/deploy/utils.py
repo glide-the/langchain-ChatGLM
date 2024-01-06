@@ -225,7 +225,7 @@ async def create_subscribe_actor_pool(
     return await xo.create_actor_pool(
         address=address,
         n_process=0,
-        auto_recover="process",
+        auto_recover=False,
         subprocess_start_method=subprocess_start_method,
         logging_conf={"dict": logging_conf},
     )

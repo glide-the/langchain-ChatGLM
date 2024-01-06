@@ -146,14 +146,15 @@ class FastChatApplicationAdapter(ApplicationAdapter):
             if isinstance(p, dict):
                 for process in p.values():
                     try:
+
                         process.kill()
-                    finally:
-                        process.terminate()
+                    except Exception as e:
+                        logger.info("Failed to kill process %s", p, exc_info=True)
             else:
                 try:
                     p.kill()
-                finally:
-                    p.terminate()
+                except Exception as e:
+                    logger.info("Failed to kill process %s", p, exc_info=True)
 
         for p in fastchat_process_dict.processes.values():
             logger.info("Process status: %s", p)

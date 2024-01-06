@@ -44,8 +44,8 @@ class ProfileEndpointPublishActor(xo.StatelessActor):
         self._uptime = time.time()
         logger.info(f"publish {self.address} started")
 
-    async def _choose_subscribe(self) -> xo.ActorRefType["DeployAdapterSubscribeActor"]:
-        # TODO: better allocation strategy.
+    async def _choose_subscribe(self, plugins_name: str) -> xo.ActorRefType["DeployAdapterSubscribeActor"]:
+        # TODO: 不同的订阅提供者可能提供的资源不同,此处需要根据资源情况选择一个订阅提供者，
         min_running_adapter_count = None
         target_subscribe = None
 
@@ -57,7 +57,9 @@ class ProfileEndpointPublishActor(xo.StatelessActor):
                     or running_adapter_count < min_running_adapter_count
             ):
                 min_running_adapter_count = running_adapter_count
-                target_subscribe = subscribe
+                plugins_names = await subscribe.get_plugins_names()
+                if plugins_name in plugins_names:
+                    target_subscribe = subscribe
 
         if target_subscribe:
             return target_subscribe
@@ -89,7 +91,7 @@ class ProfileEndpointPublishActor(xo.StatelessActor):
                 raise ValueError(
                     f"Adapter is already in the Subscribe list, plugins_name: {_plugins_name}"
                 )
-            subscribe_ref = await self._choose_subscribe()
+            subscribe_ref = await self._choose_subscribe(plugins_name=_plugins_name)
 
             await subscribe_ref.launch_adapters(
                 plugins_name=_plugins_name,
